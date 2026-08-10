@@ -1,0 +1,292 @@
+// PDLC platform — Phase 0 foundation schema.
+//
+// Scope deliberately narrow: Tenant/User/RBAC/Audit/Attachment only. The
+// full domain model (Initiative, Discovery, Definition, ...) is
+// forward-declared as TypeScript types in packages/shared-types and lands
+// in this file phase by phase (A8) via expand/contract migrations — see
+// docs/06-adr/ADR-0002 and CLAUDE.md.
+//
+// TenantScoped base pattern: every tenant-owned table below carries a
+// `tenantId` column, a foreign key to `tenants`, an index on `tenantId`,
+// AND a Postgres Row-Level Security policy (see the accompanying
+// migration.sql) keyed on the `app.tenant_id` session variable set once per
+// request by RequestContextMiddleware. Application code must never trust
+// the app layer alone to filter by tenant — RLS is the backstop.
+//
+// New tenant-scoped models MUST repeat this shape:
+//   tenantId String
+//   tenant   Tenant @relation(fields: [tenantId], references: [id])
+//   @@index([tenantId])
+// ...and the migration that creates them MUST enable + force RLS with a
+// policy scoped to app.tenant_id, following the pattern already in
+// prisma/migrations/00000000000000_init/migration.sql.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["public", "audit"]
+}
+
+// ---------------------------------------------------------------------------
+// Tenancy
+// ---------------------------------------------------------------------------
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  PROVISIONING
+  OFFBOARDING
+
+  @@schema("public")
+}
+
+/// Data residency: a tenant's data must never cross this region boundary
+/// (A5). Infra provisioning pins storage/DB to the matching region.
+enum DataResidencyRegion {
+  US
+  EU
+  UK
+  APAC
+
+  @@schema("public")
+}
+
+model Tenant {
+  id                String              @id @default(uuid())
+  name              String
+  slug              String              @unique
+  status            TenantStatus        @default(PROVISIONING)
+  residencyRegion   DataResidencyRegion @default(US)
+  /// Reference into the vault/KMS — never the key material itself (BYOK-ready).
+  encryptionKeyRef  String?
+  retentionPolicyId String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  users       User[]
+  roles       Role[]
+  userRoles   UserRole[]
+  attachments Attachment[]
+
+  @@map("tenants")
+  @@schema("public")
+}
+
+// ---------------------------------------------------------------------------
+// RBAC
+// ---------------------------------------------------------------------------
+
+/// The 10 personas from the brief (A2). Selects an RBAC role bundle + view
+/// composition — never forks the data model. See CLAUDE.md.
+enum Persona {
+  PRODUCT_MANAGER
+  AREA_PRODUCT_OWNER
+  PRODUCT_EXECUTIVE
+  DESIGNER
+  ENGINEER
+  RESEARCHER
+  CONTROL_RISK
+  GOVERNANCE
+  STAKEHOLDER
+  SENIOR_MANAGEMENT
+
+  @@schema("public")
+}
+
+model User {
+  id               String   @id @default(uuid())
+  tenantId         String
+  tenant           Tenant   @relation(fields: [tenantId], references: [id])
+  email            String
+  displayName      String
+  primaryPersona   Persona
+  isServiceAccount Boolean  @default(false)
+  /// OIDC `sub` claim.
+  ssoSubject       String?
+  /// SCIM provisioning correlation id.
+  scimExternalId   String?
+  active           Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  userRoles UserRole[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@map("users")
+  @@schema("public")
+}
+
+model Role {
+  id           String   @id @default(uuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id])
+  /// Stable machine key, e.g. "pm", "designer_readonly". Unique per tenant so a tenant can customize.
+  key          String
+  name         String
+  description  String
+  personaKey   Persona
+  /// Seeded roles cannot be deleted, only cloned.
+  isSystemRole Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  rolePermissions RolePermission[]
+  userRoles       UserRole[]
+
+  @@unique([tenantId, key])
+  @@index([tenantId])
+  @@map("roles")
+  @@schema("public")
+}
+
+enum PermissionAction {
+  CREATE
+  READ
+  UPDATE
+  DELETE
+  APPROVE
+  ATTEST
+  EXPORT
+
+  @@schema("public")
+}
+
+/// Global catalogue (not tenant-scoped) — the set of resource+action pairs the
+/// platform knows how to guard. `@RequirePermission()` checks against this.
+model Permission {
+  id          String            @id @default(uuid())
+  resource    String
+  action      PermissionAction
+  description String
+
+  rolePermissions RolePermission[]
+
+  @@unique([resource, action])
+  @@map("permissions")
+  @@schema("public")
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+  @@schema("public")
+}
+
+model UserRole {
+  tenantId           String
+  userId             String
+  roleId             String
+  /// Optional scope narrowing (e.g. this role only applies within one initiative or product area).
+  scopeInitiativeId  String?
+  scopeProductAreaId String?
+  grantedBy          String
+  grantedAt          DateTime  @default(now())
+  expiresAt          DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@index([tenantId])
+  @@map("user_roles")
+  @@schema("public")
+}
+
+// ---------------------------------------------------------------------------
+// Attachments
+// ---------------------------------------------------------------------------
+
+enum DataClassification {
+  PUBLIC
+  INTERNAL
+  CONFIDENTIAL
+  MNPI
+  GXP
+
+  @@schema("public")
+}
+
+enum VirusScanStatus {
+  PENDING
+  CLEAN
+  INFECTED
+  ERROR
+
+  @@schema("public")
+}
+
+model Attachment {
+  id                 String              @id @default(uuid())
+  tenantId           String
+  tenant             Tenant              @relation(fields: [tenantId], references: [id])
+  /// Polymorphic owner — the entity this file is attached to (e.g. "Story", "Initiative").
+  ownerType          String
+  ownerId            String
+  fileName           String
+  mimeType           String
+  sizeBytes          Int
+  /// S3-compatible object storage key. Never expose a raw bucket URL to clients.
+  storageKey         String
+  checksumSha256     String
+  uploadedBy         String
+  dataClassification DataClassification @default(INTERNAL)
+  virusScanStatus    VirusScanStatus    @default(PENDING)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  @@index([tenantId, ownerType, ownerId])
+  @@map("attachments")
+  @@schema("public")
+}
+
+// ---------------------------------------------------------------------------
+// Audit (append-only, separate Postgres schema)
+// ---------------------------------------------------------------------------
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  READ_SENSITIVE
+  EXPORT
+  ATTEST
+  SIGN
+
+  @@schema("audit")
+}
+
+/// Immutable. Written exclusively by AuditInterceptor — application code
+/// must never UPDATE or DELETE a row here. The migration REVOKEs UPDATE/DELETE
+/// grants from the app role at the database level as a second backstop.
+model AuditEvent {
+  id                    String      @id @default(uuid())
+  tenantId              String
+  actorUserId           String?
+  actorServiceAccountId String?
+  action                AuditAction
+  entityType            String
+  entityId              String
+  requestId             String
+  before                Json?
+  after                 Json?
+  ipAddress             String?
+  userAgent             String?
+  occurredAt            DateTime    @default(now())
+
+  @@index([tenantId, entityType, entityId])
+  @@index([tenantId, occurredAt])
+  @@map("audit_events")
+  @@schema("audit")
+}
