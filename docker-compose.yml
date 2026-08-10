@@ -1,0 +1,70 @@
+name: pdlc-platform
+
+# Local dev infra only. Nothing here is production-hardened (default
+# passwords, no TLS, single node) — see docs/02-architecture.md for the
+# real deployment topology (Kubernetes + managed Postgres/Redis/OpenSearch).
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: pdlc
+      POSTGRES_PASSWORD: pdlc
+      POSTGRES_DB: pdlc
+    ports:
+      - '5432:5432'
+    volumes:
+      - pdlc_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U pdlc']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6379:6379'
+    volumes:
+      - pdlc_redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  opensearch:
+    image: opensearchproject/opensearch:2.18.0
+    environment:
+      discovery.type: single-node
+      DISABLE_SECURITY_PLUGIN: 'true'
+      OPENSEARCH_JAVA_OPTS: '-Xms512m -Xmx512m'
+    ports:
+      - '9200:9200'
+    volumes:
+      - pdlc_opensearch_data:/usr/share/opensearch/data
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -sf http://localhost:9200/_cluster/health || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  localstack:
+    image: localstack/localstack:3
+    environment:
+      SERVICES: s3
+      DEFAULT_REGION: us-east-1
+    ports:
+      - '4566:4566'
+    volumes:
+      - pdlc_localstack_data:/var/lib/localstack
+    healthcheck:
+      test: ['CMD', 'curl', '-sf', 'http://localhost:4566/_localstack/health']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pdlc_postgres_data:
+  pdlc_redis_data:
+  pdlc_opensearch_data:
+  pdlc_localstack_data:
