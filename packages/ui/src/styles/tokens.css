@@ -1,0 +1,55 @@
+/**
+ * Design tokens. Enterprise-calm, dense-but-readable per A5 UX NFR:
+ * consistent left nav + context bar, no novelty for its own sake. All
+ * colors meet WCAG 2.2 AA contrast against their paired surface.
+ */
+:root {
+  --pdlc-color-bg: 255 255 255;
+  --pdlc-color-fg: 23 23 23;
+  --pdlc-color-muted: 107 114 128;
+  --pdlc-color-border: 226 232 240;
+  --pdlc-color-primary: 29 78 216;
+  --pdlc-color-primary-fg: 255 255 255;
+  --pdlc-color-danger: 185 28 28;
+  --pdlc-color-focus: 37 99 235;
+
+  --pdlc-radius-sm: 4px;
+  --pdlc-radius-md: 6px;
+  --pdlc-radius-lg: 10px;
+
+  --pdlc-space-1: 4px;
+  --pdlc-space-2: 8px;
+  --pdlc-space-3: 12px;
+  --pdlc-space-4: 16px;
+  --pdlc-space-6: 24px;
+  --pdlc-space-8: 32px;
+}
+
+.dark {
+  --pdlc-color-bg: 15 17 21;
+  --pdlc-color-fg: 237 239 242;
+  --pdlc-color-muted: 148 157 172;
+  --pdlc-color-border: 39 44 54;
+  --pdlc-color-primary: 96 141 255;
+  --pdlc-color-primary-fg: 12 15 20;
+  --pdlc-color-danger: 248 113 113;
+  --pdlc-color-focus: 96 141 255;
+}
+
+/* Respect reduced motion (A5 accessibility NFR) globally. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Visible focus ring everywhere — never rely on default outline alone. */
+:focus-visible {
+  outline: 2px solid rgb(var(--pdlc-color-focus));
+  outline-offset: 2px;
+}
