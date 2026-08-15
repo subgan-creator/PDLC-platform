@@ -8,7 +8,9 @@
  * role, which — unlike the app's runtime role — is expected to bypass RLS
  * so it can seed rows for both tenants in one pass.
  */
+import { faker } from '@faker-js/faker';
 import { PrismaClient, type Persona, type PermissionAction } from '@prisma/client';
+import { slugify } from '../src/common/util/slug';
 
 const prisma = new PrismaClient();
 
@@ -236,6 +238,244 @@ const TENANTS: TenantSeed[] = [
   },
 ];
 
+// ---------------------------------------------------------------------------
+// Phase 1: Initiative Workspace + Roadmap seed data (Prompt 1)
+// ---------------------------------------------------------------------------
+
+interface SeedUser {
+  id: string;
+}
+
+const PRODUCT_AREA_DEFS = [
+  { key: 'everyday-banking', name: 'Everyday Banking' },
+  { key: 'lending', name: 'Lending' },
+  { key: 'payments-cards', name: 'Payments & Cards' },
+] as const;
+
+const TOPICS_BY_AREA: Record<string, string[]> = {
+  'everyday-banking': [
+    'account opening',
+    'e-statements',
+    'card controls',
+    'branch appointment booking',
+    'overdraft alerts',
+    'joint accounts',
+    'account closure',
+    'direct debit management',
+    'customer onboarding KYC',
+    'savings goals',
+  ],
+  lending: [
+    'personal loan application',
+    'mortgage pre-approval',
+    'credit limit increase requests',
+    'hardship assistance',
+    'auto loan refinancing',
+    'loan servicing portal',
+    'buy-now-pay-later',
+    'affordability checks',
+    'early repayment',
+    'collections outreach',
+  ],
+  'payments-cards': [
+    'card replacement',
+    'contactless limits',
+    'international transfers',
+    'recurring payments',
+    'dispute resolution',
+    'virtual card issuance',
+    'real-time payments',
+    'foreign exchange rates',
+    'merchant chargebacks',
+    'card tokenization',
+  ],
+};
+
+const TITLE_TEMPLATES: Array<(topic: string) => string> = [
+  (t) => `Modernize ${t}`,
+  (t) => `Redesign ${t} experience`,
+  (t) => `Automate ${t}`,
+  (t) => `Consolidate ${t} into one flow`,
+  (t) => `Self-service ${t}`,
+  (t) => `Reduce time-to-resolution for ${t}`,
+];
+
+const TEAMS = ['Mobile', 'Web', 'Core Banking', 'Fraud & Risk', 'Payments Platform', 'Data & Analytics'];
+const TAGS = ['regulatory', 'customer-experience', 'cost-reduction', 'tech-debt', 'growth', 'resilience'];
+
+const PHASES = ['DISCOVERY', 'DEFINITION', 'BUILD', 'LAUNCH', 'ADOPT', 'DONE'] as const;
+// Weighted toward the earlier/build phases — a realistic in-flight portfolio, not evenly split.
+const PHASE_WEIGHTS = [0.15, 0.2, 0.3, 0.15, 0.1, 0.1];
+
+function weightedPick<T>(items: readonly T[], weights: number[]): T {
+  const r = Math.random();
+  let acc = 0;
+  for (let i = 0; i < items.length; i++) {
+    acc += weights[i] ?? 0;
+    if (r <= acc) return items[i] as T;
+  }
+  return items[items.length - 1] as T;
+}
+
+function pickHealth(): { health: 'GREEN' | 'AMBER' | 'RED'; healthReason: string | null } {
+  const r = Math.random();
+  if (r < 0.7) return { health: 'GREEN', healthReason: null };
+  if (r < 0.9) return { health: 'AMBER', healthReason: faker.helpers.arrayElement(['Dependency slipping', 'Scope grew mid-sprint', 'Awaiting legal sign-off', 'Vendor delay']) };
+  return { health: 'RED', healthReason: faker.helpers.arrayElement(['Blocked on Core Banking API', 'Key engineer out, no backfill', 'Budget frozen pending review']) };
+}
+
+function pickBucket(phase: (typeof PHASES)[number]): { bucket: 'NOW' | 'NEXT' | 'LATER' | null; rank: number | null } {
+  if (phase === 'DONE') return { bucket: null, rank: null };
+  const bucket = weightedPick(['NOW', 'NEXT', 'LATER'] as const, [0.2, 0.4, 0.4]);
+  return { bucket, rank: Math.round(faker.number.float({ min: 0, max: 1000, fractionDigits: 2 }) * 100) / 100 };
+}
+
+/**
+ * Idempotent only at the "don't re-seed if it looks already done" level —
+ * checks the tenant's initiative count rather than upserting each of the
+ * ~60 rows individually (there's no natural business key to upsert on
+ * beyond slug, and regenerating identical fake data every run isn't the
+ * goal; re-running against a fresh database is).
+ */
+async function seedInitiativeWorkspace(tenantId: string, pmUsers: SeedUser[], allUsers: SeedUser[]): Promise<void> {
+  const existingCount = await prisma.initiative.count({ where: { tenantId } });
+  if (existingCount > 0) {
+    console.log(`  Initiative Workspace: ${existingCount} initiatives already present, skipping seed.`);
+    return;
+  }
+
+  console.log('  Seeding Initiative Workspace: 3 product areas, 60 initiatives...');
+
+  const areas = await Promise.all(
+    PRODUCT_AREA_DEFS.map((a) =>
+      prisma.productArea.upsert({
+        where: { tenantId_key: { tenantId, key: a.key } },
+        create: { tenantId, key: a.key, name: a.name },
+        update: { name: a.name },
+      }),
+    ),
+  );
+
+  const ownerPool = pmUsers.length > 0 ? pmUsers : allUsers;
+  let ownerIndex = 0;
+
+  for (const area of areas) {
+    const topics = TOPICS_BY_AREA[area.key] ?? [];
+    for (let i = 0; i < 20; i++) {
+      const topic = topics[i % topics.length] ?? 'core platform';
+      const template = TITLE_TEMPLATES[i % TITLE_TEMPLATES.length];
+      const suffix = i >= topics.length ? ` (phase ${Math.floor(i / topics.length) + 1})` : '';
+      const title = `${template ? template(topic) : `Improve ${topic}`}${suffix}`;
+
+      const phase = weightedPick(PHASES, PHASE_WEIGHTS);
+      const { health, healthReason } = pickHealth();
+      const { bucket, rank } = pickBucket(phase);
+      const plannedStart = faker.date.between({ from: '2025-10-01', to: '2026-06-01' });
+      const plannedEnd = faker.date.between({ from: plannedStart, to: '2027-03-01' });
+      const owner = ownerPool[ownerIndex % ownerPool.length];
+      ownerIndex += 1;
+
+      const initiative = await prisma.initiative.create({
+        data: {
+          tenantId,
+          title,
+          slug: `${slugify(title)}-${faker.string.alphanumeric(4).toLowerCase()}`,
+          problemStatement: faker.lorem.paragraph(),
+          phase,
+          health,
+          healthReason,
+          confidence: faker.helpers.arrayElement(['LOW', 'MEDIUM', 'HIGH']),
+          tshirtSize: faker.helpers.arrayElement(['XS', 'S', 'M', 'L', 'XL']),
+          scope: faker.lorem.sentences(2),
+          nonScope: faker.lorem.sentence(),
+          plannedStart,
+          plannedEnd,
+          ownerId: owner?.id ?? '',
+          businessSponsorId: faker.helpers.maybe(() => faker.helpers.arrayElement(allUsers)?.id, { probability: 0.5 }) ?? null,
+          contributingTeams: faker.helpers.arrayElements(TEAMS, { min: 1, max: 3 }),
+          tags: faker.helpers.arrayElements(TAGS, { min: 0, max: 3 }),
+          productAreaId: area.id,
+          dataClassification: faker.helpers.arrayElement(['INTERNAL', 'CONFIDENTIAL']),
+          roadmapBucket: bucket,
+          roadmapRank: rank,
+          outcomeMetrics: {
+            create: [
+              {
+                tenantId,
+                metricName: faker.helpers.arrayElement(['Task completion rate', 'Time to complete', 'Contact-center calls avoided', 'NPS']),
+                baseline: faker.number.int({ min: 20, max: 60 }),
+                target: faker.number.int({ min: 65, max: 95 }),
+                current: faker.helpers.maybe(() => faker.number.int({ min: 20, max: 90 }), { probability: 0.6 }) ?? null,
+                unit: '%',
+                source: 'Manual — Amplitude connector not yet live',
+              },
+            ],
+          },
+          hypotheses: {
+            create: faker.helpers.maybe(
+              () => [
+                {
+                  tenantId,
+                  statement: `We believe that ${template ? template(topic).toLowerCase() : topic} will reduce customer effort and increase self-service completion.`,
+                  confidence: faker.helpers.arrayElement(['LOW', 'MEDIUM', 'HIGH']),
+                  validated: faker.helpers.maybe(() => faker.datatype.boolean(), { probability: 0.4 }) ?? null,
+                },
+              ],
+              { probability: 0.7 },
+            ) ?? [],
+          },
+        },
+      });
+
+      const raidCount = faker.number.int({ min: 0, max: 3 });
+      for (let r = 0; r < raidCount; r++) {
+        await prisma.raidItem.create({
+          data: {
+            tenantId,
+            initiativeId: initiative.id,
+            type: faker.helpers.arrayElement(['RISK', 'ASSUMPTION', 'ISSUE', 'DEPENDENCY']),
+            description: faker.lorem.sentence(),
+            severity: faker.helpers.arrayElement(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']),
+            ownerId: faker.helpers.arrayElement(allUsers)?.id ?? null,
+            dueDate: faker.helpers.maybe(() => faker.date.future(), { probability: 0.6 }) ?? null,
+            status: faker.helpers.arrayElement(['OPEN', 'OPEN', 'MITIGATED', 'CLOSED']),
+          },
+        });
+      }
+
+      const milestoneCount = faker.number.int({ min: 1, max: 3 });
+      for (let m = 0; m < milestoneCount; m++) {
+        await prisma.milestone.create({
+          data: {
+            tenantId,
+            initiativeId: initiative.id,
+            title: faker.helpers.arrayElement(['Discovery complete', 'Design review', 'Beta launch', 'GA launch', 'Legal sign-off', 'UAT complete']),
+            dueDate: faker.date.between({ from: plannedStart, to: plannedEnd }),
+            status: faker.helpers.arrayElement(['PLANNED', 'PLANNED', 'DONE', 'MISSED']),
+          },
+        });
+      }
+
+      await prisma.statusUpdate.create({
+        data: {
+          tenantId,
+          initiativeId: initiative.id,
+          authoredBy: owner?.id ?? '',
+          periodStart: faker.date.recent({ days: 14 }),
+          periodEnd: new Date(),
+          progress: faker.lorem.sentence(),
+          next: faker.lorem.sentence(),
+          risks: health === 'GREEN' ? 'None at this time.' : faker.lorem.sentence(),
+          asks: faker.helpers.maybe(() => faker.lorem.sentence(), { probability: 0.4 }) ?? 'None.',
+          healthAtTimeOfUpdate: health,
+        },
+      });
+    }
+  }
+
+  console.log('  Initiative Workspace seeded: 60 initiatives across 3 product areas.');
+}
+
 async function main(): Promise<void> {
   console.log('Seeding permission catalogue...');
   const permissionRecords = await Promise.all(
@@ -320,6 +560,17 @@ async function main(): Promise<void> {
       console.log(
         `  ${userSeed.displayName} <${userSeed.email}> — ${userSeed.persona} (dev header: x-dev-user-id=${user.id}, x-dev-tenant-id=${tenant.id})`,
       );
+    }
+
+    // Phase 1 (Prompt 1): 60 realistic initiatives across 3 product areas,
+    // for the retail-bank tenant only — acme-bank is our stand-in retail
+    // bank, northwind-pharma has no Initiative Workspace data seeded.
+    if (tenantSeed.slug === 'acme-bank') {
+      const pmUsers = await prisma.user.findMany({
+        where: { tenantId: tenant.id, primaryPersona: 'PRODUCT_MANAGER' },
+      });
+      const allUsers = await prisma.user.findMany({ where: { tenantId: tenant.id } });
+      await seedInitiativeWorkspace(tenant.id, pmUsers, allUsers);
     }
   }
 
