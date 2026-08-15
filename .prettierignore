@@ -1,0 +1,4 @@
+# Original source-of-truth brief, not ours to reformat — its pseudo-table
+# layout (tab-separated, not real Markdown tables) reads fine as authored
+# and Prettier mangles the column alignment.
+00-brief.md

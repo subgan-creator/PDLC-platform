@@ -300,8 +300,22 @@ const TITLE_TEMPLATES: Array<(topic: string) => string> = [
   (t) => `Reduce time-to-resolution for ${t}`,
 ];
 
-const TEAMS = ['Mobile', 'Web', 'Core Banking', 'Fraud & Risk', 'Payments Platform', 'Data & Analytics'];
-const TAGS = ['regulatory', 'customer-experience', 'cost-reduction', 'tech-debt', 'growth', 'resilience'];
+const TEAMS = [
+  'Mobile',
+  'Web',
+  'Core Banking',
+  'Fraud & Risk',
+  'Payments Platform',
+  'Data & Analytics',
+];
+const TAGS = [
+  'regulatory',
+  'customer-experience',
+  'cost-reduction',
+  'tech-debt',
+  'growth',
+  'resilience',
+];
 
 const PHASES = ['DISCOVERY', 'DEFINITION', 'BUILD', 'LAUNCH', 'ADOPT', 'DONE'] as const;
 // Weighted toward the earlier/build phases — a realistic in-flight portfolio, not evenly split.
@@ -320,14 +334,36 @@ function weightedPick<T>(items: readonly T[], weights: number[]): T {
 function pickHealth(): { health: 'GREEN' | 'AMBER' | 'RED'; healthReason: string | null } {
   const r = Math.random();
   if (r < 0.7) return { health: 'GREEN', healthReason: null };
-  if (r < 0.9) return { health: 'AMBER', healthReason: faker.helpers.arrayElement(['Dependency slipping', 'Scope grew mid-sprint', 'Awaiting legal sign-off', 'Vendor delay']) };
-  return { health: 'RED', healthReason: faker.helpers.arrayElement(['Blocked on Core Banking API', 'Key engineer out, no backfill', 'Budget frozen pending review']) };
+  if (r < 0.9)
+    return {
+      health: 'AMBER',
+      healthReason: faker.helpers.arrayElement([
+        'Dependency slipping',
+        'Scope grew mid-sprint',
+        'Awaiting legal sign-off',
+        'Vendor delay',
+      ]),
+    };
+  return {
+    health: 'RED',
+    healthReason: faker.helpers.arrayElement([
+      'Blocked on Core Banking API',
+      'Key engineer out, no backfill',
+      'Budget frozen pending review',
+    ]),
+  };
 }
 
-function pickBucket(phase: (typeof PHASES)[number]): { bucket: 'NOW' | 'NEXT' | 'LATER' | null; rank: number | null } {
+function pickBucket(phase: (typeof PHASES)[number]): {
+  bucket: 'NOW' | 'NEXT' | 'LATER' | null;
+  rank: number | null;
+} {
   if (phase === 'DONE') return { bucket: null, rank: null };
   const bucket = weightedPick(['NOW', 'NEXT', 'LATER'] as const, [0.2, 0.4, 0.4]);
-  return { bucket, rank: Math.round(faker.number.float({ min: 0, max: 1000, fractionDigits: 2 }) * 100) / 100 };
+  return {
+    bucket,
+    rank: Math.round(faker.number.float({ min: 0, max: 1000, fractionDigits: 2 }) * 100) / 100,
+  };
 }
 
 /**
@@ -337,10 +373,16 @@ function pickBucket(phase: (typeof PHASES)[number]): { bucket: 'NOW' | 'NEXT' | 
  * beyond slug, and regenerating identical fake data every run isn't the
  * goal; re-running against a fresh database is).
  */
-async function seedInitiativeWorkspace(tenantId: string, pmUsers: SeedUser[], allUsers: SeedUser[]): Promise<void> {
+async function seedInitiativeWorkspace(
+  tenantId: string,
+  pmUsers: SeedUser[],
+  allUsers: SeedUser[],
+): Promise<void> {
   const existingCount = await prisma.initiative.count({ where: { tenantId } });
   if (existingCount > 0) {
-    console.log(`  Initiative Workspace: ${existingCount} initiatives already present, skipping seed.`);
+    console.log(
+      `  Initiative Workspace: ${existingCount} initiatives already present, skipping seed.`,
+    );
     return;
   }
 
@@ -391,7 +433,10 @@ async function seedInitiativeWorkspace(tenantId: string, pmUsers: SeedUser[], al
           plannedStart,
           plannedEnd,
           ownerId: owner?.id ?? '',
-          businessSponsorId: faker.helpers.maybe(() => faker.helpers.arrayElement(allUsers)?.id, { probability: 0.5 }) ?? null,
+          businessSponsorId:
+            faker.helpers.maybe(() => faker.helpers.arrayElement(allUsers)?.id, {
+              probability: 0.5,
+            }) ?? null,
           contributingTeams: faker.helpers.arrayElements(TEAMS, { min: 1, max: 3 }),
           tags: faker.helpers.arrayElements(TAGS, { min: 0, max: 3 }),
           productAreaId: area.id,
@@ -402,27 +447,38 @@ async function seedInitiativeWorkspace(tenantId: string, pmUsers: SeedUser[], al
             create: [
               {
                 tenantId,
-                metricName: faker.helpers.arrayElement(['Task completion rate', 'Time to complete', 'Contact-center calls avoided', 'NPS']),
+                metricName: faker.helpers.arrayElement([
+                  'Task completion rate',
+                  'Time to complete',
+                  'Contact-center calls avoided',
+                  'NPS',
+                ]),
                 baseline: faker.number.int({ min: 20, max: 60 }),
                 target: faker.number.int({ min: 65, max: 95 }),
-                current: faker.helpers.maybe(() => faker.number.int({ min: 20, max: 90 }), { probability: 0.6 }) ?? null,
+                current:
+                  faker.helpers.maybe(() => faker.number.int({ min: 20, max: 90 }), {
+                    probability: 0.6,
+                  }) ?? null,
                 unit: '%',
                 source: 'Manual — Amplitude connector not yet live',
               },
             ],
           },
           hypotheses: {
-            create: faker.helpers.maybe(
-              () => [
-                {
-                  tenantId,
-                  statement: `We believe that ${template ? template(topic).toLowerCase() : topic} will reduce customer effort and increase self-service completion.`,
-                  confidence: faker.helpers.arrayElement(['LOW', 'MEDIUM', 'HIGH']),
-                  validated: faker.helpers.maybe(() => faker.datatype.boolean(), { probability: 0.4 }) ?? null,
-                },
-              ],
-              { probability: 0.7 },
-            ) ?? [],
+            create:
+              faker.helpers.maybe(
+                () => [
+                  {
+                    tenantId,
+                    statement: `We believe that ${template ? template(topic).toLowerCase() : topic} will reduce customer effort and increase self-service completion.`,
+                    confidence: faker.helpers.arrayElement(['LOW', 'MEDIUM', 'HIGH']),
+                    validated:
+                      faker.helpers.maybe(() => faker.datatype.boolean(), { probability: 0.4 }) ??
+                      null,
+                  },
+                ],
+                { probability: 0.7 },
+              ) ?? [],
           },
         },
       });
@@ -449,7 +505,14 @@ async function seedInitiativeWorkspace(tenantId: string, pmUsers: SeedUser[], al
           data: {
             tenantId,
             initiativeId: initiative.id,
-            title: faker.helpers.arrayElement(['Discovery complete', 'Design review', 'Beta launch', 'GA launch', 'Legal sign-off', 'UAT complete']),
+            title: faker.helpers.arrayElement([
+              'Discovery complete',
+              'Design review',
+              'Beta launch',
+              'GA launch',
+              'Legal sign-off',
+              'UAT complete',
+            ]),
             dueDate: faker.date.between({ from: plannedStart, to: plannedEnd }),
             status: faker.helpers.arrayElement(['PLANNED', 'PLANNED', 'DONE', 'MISSED']),
           },

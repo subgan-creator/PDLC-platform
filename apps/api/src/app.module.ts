@@ -21,6 +21,7 @@ import { StatusUpdatesModule } from './status-updates/status-updates.module';
 import { LinksModule } from './links/links.module';
 import { CommentsModule } from './comments/comments.module';
 import { WatchersModule } from './watchers/watchers.module';
+import { StakeholdersModule } from './stakeholders/stakeholders.module';
 import { ActivityModule } from './activity/activity.module';
 import { RoadmapModule } from './roadmap/roadmap.module';
 
@@ -59,6 +60,7 @@ import { RoadmapModule } from './roadmap/roadmap.module';
     LinksModule,
     CommentsModule,
     WatchersModule,
+    StakeholdersModule,
     ActivityModule,
     RoadmapModule,
   ],
