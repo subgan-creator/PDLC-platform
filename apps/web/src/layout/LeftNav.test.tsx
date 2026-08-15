@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { createRootRoute, createRoute, createRouter, RouterProvider } from '@tanstack/react-router';
+import { AuthProvider } from '../auth/auth-context';
 import { LeftNav } from './LeftNav';
 
 describe('LeftNav', () => {
@@ -13,7 +14,11 @@ describe('LeftNav', () => {
     });
     const router = createRouter({ routeTree: rootRoute.addChildren([indexRoute]) });
 
-    render(<RouterProvider router={router} />);
+    render(
+      <AuthProvider>
+        <RouterProvider router={router} />
+      </AuthProvider>,
+    );
 
     expect(await screen.findByRole('navigation', { name: 'Primary' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'My Day' })).toBeInTheDocument();

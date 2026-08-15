@@ -81,7 +81,7 @@ pnpm test                     # turbo unit tests, all packages
 pnpm --filter @pdlc/web test:e2e   # Playwright
 ```
 
-Dev auth: `AUTH_MODE=dev-stub` (default outside prod) trusts `x-dev-user-id` / `x-dev-tenant-id` headers — the seed script prints the header values for every seeded user. Real auth is OIDC (`AUTH_MODE=oidc`); dev-stub is refused at boot if `NODE_ENV=production`.
+Dev auth: `AUTH_MODE=dev-stub` (default outside prod) trusts `x-dev-user-id` / `x-dev-tenant-id` headers. `apps/web` gets these from a "Who are you?" picker (`DevIdentityGate`) backed by `GET /dev/identities` — a `@Public()`, dev-stub-only endpoint (refused with 404 outside `AUTH_MODE=dev-stub`) that lists seeded users for the picker to render; no manual header-copying needed. Real auth is OIDC (`AUTH_MODE=oidc`); dev-stub itself is refused at boot if `NODE_ENV=production`.
 
 ## Where things live for AI-governed features
 

@@ -1,5 +1,6 @@
 import { Link } from '@tanstack/react-router';
-import { cn } from '@pdlc/ui';
+import { Button, cn } from '@pdlc/ui';
+import { useAuth } from '../auth/auth-context';
 
 interface NavItem {
   to: string;
@@ -21,6 +22,8 @@ const NAV_ITEMS: NavItem[] = [
  * not just a color change, so it survives both keyboard and low-vision use.
  */
 export function LeftNav() {
+  const { devIdentity, signOut } = useAuth();
+
   return (
     <nav
       aria-label="Primary"
@@ -39,6 +42,21 @@ export function LeftNav() {
           {item.label}
         </Link>
       ))}
+
+      {devIdentity && (
+        <div className="mt-auto flex flex-col gap-1 border-t border-border pt-3">
+          <span className="px-2 text-xs text-muted">
+            Acting as
+            <br />
+            <span className="font-medium text-fg">
+              {devIdentity.displayName ?? devIdentity.userId}
+            </span>
+          </span>
+          <Button variant="ghost" size="sm" onClick={signOut}>
+            Switch user
+          </Button>
+        </div>
+      )}
     </nav>
   );
 }

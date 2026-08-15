@@ -11,6 +11,7 @@ import { RbacModule } from './rbac/rbac.module';
 import { AuditModule } from './audit/audit.module';
 import { HealthModule } from './health/health.module';
 import { UsersModule } from './users/users.module';
+import { DevToolsModule } from './dev-tools/dev-tools.module';
 import { OutboxModule } from './outbox/outbox.module';
 import { VersionsModule } from './versioning/versions.module';
 import { ProductAreasModule } from './product-areas/product-areas.module';
@@ -51,6 +52,7 @@ import { RoadmapModule } from './roadmap/roadmap.module';
     AuditModule,
     HealthModule,
     UsersModule,
+    DevToolsModule,
     // Phase 1 — Initiative Workspace + Roadmap (the spine, A8/Prompt 1).
     ProductAreasModule,
     InitiativesModule,

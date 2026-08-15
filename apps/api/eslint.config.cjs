@@ -10,8 +10,16 @@ module.exports = [
     // health/**: Terminus's PrismaHealthIndicator needs the raw PrismaService
     // to ping the DB — a liveness/readiness check has no tenant context and
     // never touches a tenant-scoped table, so the repository pattern doesn't
-    // apply here.
-    ignores: ['src/**/*.repository.ts', 'src/prisma/**', 'src/audit/**', 'src/health/**'],
+    // apply here. dev-tools/**: the dev-stub identity picker deliberately
+    // lists users *across* tenants (withoutTenantScope) and only ever runs
+    // when AUTH_MODE=dev-stub, which is itself refused in production.
+    ignores: [
+      'src/**/*.repository.ts',
+      'src/prisma/**',
+      'src/audit/**',
+      'src/health/**',
+      'src/dev-tools/**',
+    ],
     rules: {
       'no-restricted-imports': [
         'error',

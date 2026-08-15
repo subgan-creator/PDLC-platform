@@ -11,6 +11,9 @@ export class ApiError extends Error {
 export interface DevIdentity {
   userId: string;
   tenantId: string;
+  /** Display-only, for the "Acting as" indicator — the API never reads these, only userId/tenantId. */
+  displayName?: string;
+  tenantName?: string;
 }
 
 /** The only value shapes a query-param object may hold — anything else is a caller bug, not a runtime possibility to guard. */
