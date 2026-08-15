@@ -25,18 +25,24 @@ export interface ProductArea extends Timestamped, TenantScoped {
   businessLineId: Id<'BusinessLine'> | null;
 }
 
-export type InitiativePhase = 'discovery' | 'definition' | 'build' | 'launch' | 'adopt' | 'done';
+// NOTE ON CASING: these mirror the Prisma enums (schema.prisma) and the Zod
+// DTOs in apps/api/src/initiatives/dto — i.e. the actual wire format —
+// verbatim, including case. Domain types elsewhere in this package that
+// predate the Initiative Workspace (e.g. PersonaKey, DataClassification's
+// sibling usages) use lowercase snake_case instead; that's a known,
+// pre-existing drift from the DB-backed casing, not something to copy here.
+export type InitiativePhase = 'DISCOVERY' | 'DEFINITION' | 'BUILD' | 'LAUNCH' | 'ADOPT' | 'DONE';
 
-export type HealthStatus = 'green' | 'amber' | 'red';
+export type HealthStatus = 'GREEN' | 'AMBER' | 'RED';
 
-export type Confidence = 'low' | 'medium' | 'high';
+export type Confidence = 'LOW' | 'MEDIUM' | 'HIGH';
 
-export type TShirtSize = 'xs' | 's' | 'm' | 'l' | 'xl';
+export type TShirtSize = 'XS' | 'S' | 'M' | 'L' | 'XL';
 
-export type RaciRole = 'responsible' | 'accountable' | 'consulted' | 'informed';
+export type RaciRole = 'RESPONSIBLE' | 'ACCOUNTABLE' | 'CONSULTED' | 'INFORMED';
 
 /** Manual PM placement on the roadmap — distinct from `phase`, which tracks lifecycle state, not roadmap priority. */
-export type RoadmapBucket = 'now' | 'next' | 'later';
+export type RoadmapBucket = 'NOW' | 'NEXT' | 'LATER';
 
 /**
  * The spine of the system (A3, JTBD 2; Prompt 1). Every downstream module
@@ -58,7 +64,7 @@ export interface Initiative
 
   phase: InitiativePhase;
   health: HealthStatus;
-  /** Required by the API whenever `health !== 'green'` — enforced at the Zod boundary, not just in the UI. */
+  /** Required by the API whenever `health !== 'GREEN'` — enforced at the Zod boundary, not just in the UI. */
   healthReason: string | null;
   confidence: Confidence;
   tshirtSize: TShirtSize;
@@ -108,9 +114,9 @@ export interface Hypothesis {
   validated: boolean | null; // null = not yet tested
 }
 
-export type RaidType = 'risk' | 'assumption' | 'issue' | 'dependency';
-export type RaidSeverity = 'low' | 'medium' | 'high' | 'critical';
-export type RaidStatus = 'open' | 'mitigated' | 'closed';
+export type RaidType = 'RISK' | 'ASSUMPTION' | 'ISSUE' | 'DEPENDENCY';
+export type RaidSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+export type RaidStatus = 'OPEN' | 'MITIGATED' | 'CLOSED';
 
 export interface RaidItem extends Timestamped {
   id: Id<'RaidItem'>;
@@ -124,7 +130,7 @@ export interface RaidItem extends Timestamped {
   status: RaidStatus;
 }
 
-export type MilestoneStatus = 'planned' | 'done' | 'missed';
+export type MilestoneStatus = 'PLANNED' | 'DONE' | 'MISSED';
 
 export interface Milestone extends Timestamped {
   id: Id<'Milestone'>;
@@ -157,21 +163,15 @@ export interface StatusUpdate {
   draftedFromActivity: unknown | null;
 }
 
-export type LinkTargetType =
-  | 'external_url'
-  | 'story'
-  | 'figma_frame'
-  | 'confluence_page'
-  | 'jira_issue'
-  | 'other';
+export type LinkTargetType = 'EXTERNAL_URL' | 'STORY' | 'FIGMA_FRAME' | 'CONFLUENCE_PAGE' | 'JIRA_ISSUE' | 'OTHER';
 
 /** Typed link from an Initiative to any other entity or an external URL. */
 export interface InitiativeLink extends Timestamped {
   id: Id<'InitiativeLink'>;
   initiativeId: InitiativeId;
   targetType: LinkTargetType;
-  targetId: string | null; // internal entity id, when targetType isn't external_url/other
-  url: string | null; // required when targetType is external_url
+  targetId: string | null; // internal entity id, when targetType isn't EXTERNAL_URL/OTHER
+  url: string | null; // required when targetType is EXTERNAL_URL
   label: string;
   createdBy: UserId;
 }

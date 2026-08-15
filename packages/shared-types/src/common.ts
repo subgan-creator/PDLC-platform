@@ -66,9 +66,11 @@ export interface Actored {
 /**
  * Data classification for ABAC overlays (A5). Any entity that can be tagged
  * MNPI (banks) or GxP (pharma) must carry this so access guards can layer
- * classification-based rules on top of RBAC.
+ * classification-based rules on top of RBAC. Uppercase to match the Prisma
+ * `DataClassification` enum (schema.prisma) verbatim — this is the wire
+ * format, not an aspirational shape.
  */
-export type DataClassification = 'public' | 'internal' | 'confidential' | 'mnpi' | 'gxp';
+export type DataClassification = 'PUBLIC' | 'INTERNAL' | 'CONFIDENTIAL' | 'MNPI' | 'GXP';
 
 export interface Classified {
   dataClassification: DataClassification;
