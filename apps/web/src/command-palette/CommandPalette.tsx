@@ -28,6 +28,20 @@ export function CommandPalette() {
         void navigate({ to: '/' });
       },
     },
+    {
+      id: 'initiatives',
+      label: 'Go to Initiatives',
+      run: () => {
+        void navigate({ to: '/initiatives' });
+      },
+    },
+    {
+      id: 'roadmap',
+      label: 'Go to Roadmap',
+      run: () => {
+        void navigate({ to: '/roadmap' });
+      },
+    },
   ];
   const filtered = commands.filter((c) => c.label.toLowerCase().includes(query.toLowerCase()));
 

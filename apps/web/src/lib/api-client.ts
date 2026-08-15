@@ -13,6 +13,9 @@ export interface DevIdentity {
   tenantId: string;
 }
 
+/** The only value shapes a query-param object may hold — anything else is a caller bug, not a runtime possibility to guard. */
+type QueryValue = string | number | boolean | undefined | null | Array<string | number | boolean>;
+
 /**
  * Thin fetch wrapper every data hook goes through. In dev-stub auth mode
  * (see apps/api AuthGuard) it attaches the x-dev-* headers from
@@ -42,4 +45,34 @@ export async function apiFetch<T>(
 
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
+}
+
+/**
+ * `{ a: [1,2], b: undefined, c: 'x' }` -> `"?a=1&a=2&c=x"` — skips
+ * null/undefined/empty so query objects can be built with optional filters
+ * directly. Takes `object` (not `Record<string, unknown>`) so a concrete
+ * params interface without an index signature — e.g. `ListInitiativesParams`
+ * — can be passed straight through without a call-site cast.
+ */
+export function toQueryString(params: object): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params) as Array<[string, QueryValue]>) {
+    if (value === undefined || value === null || value === '') continue;
+    if (Array.isArray(value)) {
+      for (const v of value) search.append(key, String(v));
+    } else {
+      search.append(key, String(value));
+    }
+  }
+  const qs = search.toString();
+  return qs ? `?${qs}` : '';
+}
+
+export function isApiError(error: unknown): error is ApiError {
+  return error instanceof ApiError;
+}
+
+/** True when a mutation failed with the optimistic-concurrency 409 — `error.problem.conflict` is the current record for a merge prompt. */
+export function isVersionConflict(error: unknown): error is ApiError {
+  return isApiError(error) && error.problem.status === 409;
 }
