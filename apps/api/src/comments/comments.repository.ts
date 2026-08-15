@@ -24,7 +24,11 @@ export class CommentsRepository extends TenantScopedRepository {
     );
   }
 
-  async create(initiativeId: string, input: CreateCommentDto, actorUserId: string): Promise<InitiativeComment> {
+  async create(
+    initiativeId: string,
+    input: CreateCommentDto,
+    actorUserId: string,
+  ): Promise<InitiativeComment> {
     return this.withTx(async (tx) => {
       const comment = await tx.initiativeComment.create({
         data: { tenantId: this.tenantId, initiativeId, authorId: actorUserId, ...input },
@@ -54,19 +58,28 @@ export class CommentsRepository extends TenantScopedRepository {
     actorUserId: string,
   ): Promise<InitiativeComment> {
     return this.withTx(async (tx) => {
-      const existing = await tx.initiativeComment.findFirst({ where: { id, initiativeId, tenantId: this.tenantId } });
+      const existing = await tx.initiativeComment.findFirst({
+        where: { id, initiativeId, tenantId: this.tenantId },
+      });
       if (!existing || existing.deletedAt) throw new NotFoundException(`Comment ${id} not found`);
-      if (existing.authorId !== actorUserId) throw new ForbiddenException('Only the author can edit this comment');
+      if (existing.authorId !== actorUserId)
+        throw new ForbiddenException('Only the author can edit this comment');
 
-      return tx.initiativeComment.update({ where: { id }, data: { ...input, editedAt: new Date() } });
+      return tx.initiativeComment.update({
+        where: { id },
+        data: { ...input, editedAt: new Date() },
+      });
     });
   }
 
   async softDelete(initiativeId: string, id: string, actorUserId: string): Promise<void> {
     await this.withTx(async (tx) => {
-      const existing = await tx.initiativeComment.findFirst({ where: { id, initiativeId, tenantId: this.tenantId } });
+      const existing = await tx.initiativeComment.findFirst({
+        where: { id, initiativeId, tenantId: this.tenantId },
+      });
       if (!existing || existing.deletedAt) throw new NotFoundException(`Comment ${id} not found`);
-      if (existing.authorId !== actorUserId) throw new ForbiddenException('Only the author can delete this comment');
+      if (existing.authorId !== actorUserId)
+        throw new ForbiddenException('Only the author can delete this comment');
 
       await tx.initiativeComment.update({ where: { id }, data: { deletedAt: new Date() } });
     });

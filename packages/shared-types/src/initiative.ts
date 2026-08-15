@@ -51,12 +51,7 @@ export type RoadmapBucket = 'NOW' | 'NEXT' | 'LATER';
  * Phase 0 per the "no churn later" rule.
  */
 export interface Initiative
-  extends Timestamped,
-    TenantScoped,
-    Classified,
-    StageGated,
-    ControlMappable,
-    Versioned {
+  extends Timestamped, TenantScoped, Classified, StageGated, ControlMappable, Versioned {
   id: InitiativeId;
   title: string;
   slug: string;
@@ -160,10 +155,11 @@ export interface StatusUpdate {
   asks: string;
   healthAtTimeOfUpdate: HealthStatus;
   createdAt: ISODateTimeString;
-  draftedFromActivity: unknown | null;
+  draftedFromActivity: unknown;
 }
 
-export type LinkTargetType = 'EXTERNAL_URL' | 'STORY' | 'FIGMA_FRAME' | 'CONFLUENCE_PAGE' | 'JIRA_ISSUE' | 'OTHER';
+export type LinkTargetType =
+  'EXTERNAL_URL' | 'STORY' | 'FIGMA_FRAME' | 'CONFLUENCE_PAGE' | 'JIRA_ISSUE' | 'OTHER';
 
 /** Typed link from an Initiative to any other entity or an external URL. */
 export interface InitiativeLink extends Timestamped {

@@ -1,11 +1,24 @@
 import { z } from 'zod';
 
-export const initiativePhaseSchema = z.enum(['DISCOVERY', 'DEFINITION', 'BUILD', 'LAUNCH', 'ADOPT', 'DONE']);
+export const initiativePhaseSchema = z.enum([
+  'DISCOVERY',
+  'DEFINITION',
+  'BUILD',
+  'LAUNCH',
+  'ADOPT',
+  'DONE',
+]);
 export const healthStatusSchema = z.enum(['GREEN', 'AMBER', 'RED']);
 export const confidenceSchema = z.enum(['LOW', 'MEDIUM', 'HIGH']);
 export const tshirtSizeSchema = z.enum(['XS', 'S', 'M', 'L', 'XL']);
 export const roadmapBucketSchema = z.enum(['NOW', 'NEXT', 'LATER']);
-export const dataClassificationSchema = z.enum(['PUBLIC', 'INTERNAL', 'CONFIDENTIAL', 'MNPI', 'GXP']);
+export const dataClassificationSchema = z.enum([
+  'PUBLIC',
+  'INTERNAL',
+  'CONFIDENTIAL',
+  'MNPI',
+  'GXP',
+]);
 
 const outcomeMetricInputSchema = z.object({
   metricName: z.string().min(1),

@@ -23,10 +23,19 @@ export class RaidRepository extends TenantScopedRepository {
     );
   }
 
-  async create(initiativeId: string, input: CreateRaidItemDto, actorUserId: string): Promise<RaidItem> {
+  async create(
+    initiativeId: string,
+    input: CreateRaidItemDto,
+    actorUserId: string,
+  ): Promise<RaidItem> {
     return this.withTx(async (tx) => {
       const item = await tx.raidItem.create({
-        data: { tenantId: this.tenantId, initiativeId, ...input, dueDate: input.dueDate ? new Date(input.dueDate) : null },
+        data: {
+          tenantId: this.tenantId,
+          initiativeId,
+          ...input,
+          dueDate: input.dueDate ? new Date(input.dueDate) : null,
+        },
       });
       await this.outbox.emit(tx, {
         tenantId: this.tenantId,
@@ -35,20 +44,40 @@ export class RaidRepository extends TenantScopedRepository {
         entityId: item.id,
         initiativeId,
         actorUserId,
-        payload: { raidItemId: item.id, type: item.type, severity: item.severity, status: item.status },
+        payload: {
+          raidItemId: item.id,
+          type: item.type,
+          severity: item.severity,
+          status: item.status,
+        },
       });
       return item;
     });
   }
 
-  async update(initiativeId: string, id: string, input: UpdateRaidItemDto, actorUserId: string): Promise<RaidItem> {
+  async update(
+    initiativeId: string,
+    id: string,
+    input: UpdateRaidItemDto,
+    actorUserId: string,
+  ): Promise<RaidItem> {
     return this.withTx(async (tx) => {
-      const existing = await tx.raidItem.findFirst({ where: { id, initiativeId, tenantId: this.tenantId } });
+      const existing = await tx.raidItem.findFirst({
+        where: { id, initiativeId, tenantId: this.tenantId },
+      });
       if (!existing) throw new NotFoundException(`RAID item ${id} not found`);
 
       const item = await tx.raidItem.update({
         where: { id },
-        data: { ...input, dueDate: input.dueDate !== undefined ? (input.dueDate ? new Date(input.dueDate) : null) : undefined },
+        data: {
+          ...input,
+          dueDate:
+            input.dueDate !== undefined
+              ? input.dueDate
+                ? new Date(input.dueDate)
+                : null
+              : undefined,
+        },
       });
       await this.outbox.emit(tx, {
         tenantId: this.tenantId,
@@ -57,7 +86,12 @@ export class RaidRepository extends TenantScopedRepository {
         entityId: item.id,
         initiativeId,
         actorUserId,
-        payload: { raidItemId: item.id, type: item.type, severity: item.severity, status: item.status },
+        payload: {
+          raidItemId: item.id,
+          type: item.type,
+          severity: item.severity,
+          status: item.status,
+        },
       });
       return item;
     });
@@ -65,7 +99,9 @@ export class RaidRepository extends TenantScopedRepository {
 
   async delete(initiativeId: string, id: string): Promise<void> {
     await this.withTx(async (tx) => {
-      const existing = await tx.raidItem.findFirst({ where: { id, initiativeId, tenantId: this.tenantId } });
+      const existing = await tx.raidItem.findFirst({
+        where: { id, initiativeId, tenantId: this.tenantId },
+      });
       if (!existing) throw new NotFoundException(`RAID item ${id} not found`);
       await tx.raidItem.delete({ where: { id } });
     });

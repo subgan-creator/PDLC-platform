@@ -22,11 +22,18 @@ export class StatusUpdatesRepository extends TenantScopedRepository {
 
   list(initiativeId: string): Promise<StatusUpdate[]> {
     return this.withTx((tx) =>
-      tx.statusUpdate.findMany({ where: { tenantId: this.tenantId, initiativeId }, orderBy: { periodStart: 'desc' } }),
+      tx.statusUpdate.findMany({
+        where: { tenantId: this.tenantId, initiativeId },
+        orderBy: { periodStart: 'desc' },
+      }),
     );
   }
 
-  async create(initiativeId: string, input: CreateStatusUpdateDto, actorUserId: string): Promise<StatusUpdate> {
+  async create(
+    initiativeId: string,
+    input: CreateStatusUpdateDto,
+    actorUserId: string,
+  ): Promise<StatusUpdate> {
     return this.withTx(async (tx) => {
       const update = await tx.statusUpdate.create({
         data: {

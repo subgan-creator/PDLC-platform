@@ -16,11 +16,18 @@ export class MilestonesRepository extends TenantScopedRepository {
 
   list(initiativeId: string): Promise<Milestone[]> {
     return this.withTx((tx) =>
-      tx.milestone.findMany({ where: { tenantId: this.tenantId, initiativeId }, orderBy: { dueDate: 'asc' } }),
+      tx.milestone.findMany({
+        where: { tenantId: this.tenantId, initiativeId },
+        orderBy: { dueDate: 'asc' },
+      }),
     );
   }
 
-  async create(initiativeId: string, input: CreateMilestoneDto, actorUserId: string): Promise<Milestone> {
+  async create(
+    initiativeId: string,
+    input: CreateMilestoneDto,
+    actorUserId: string,
+  ): Promise<Milestone> {
     return this.withTx(async (tx) => {
       const milestone = await tx.milestone.create({
         data: { tenantId: this.tenantId, initiativeId, ...input, dueDate: new Date(input.dueDate) },
@@ -32,15 +39,27 @@ export class MilestonesRepository extends TenantScopedRepository {
         entityId: milestone.id,
         initiativeId,
         actorUserId,
-        payload: { milestoneId: milestone.id, title: milestone.title, dueDate: milestone.dueDate, status: milestone.status },
+        payload: {
+          milestoneId: milestone.id,
+          title: milestone.title,
+          dueDate: milestone.dueDate,
+          status: milestone.status,
+        },
       });
       return milestone;
     });
   }
 
-  async update(initiativeId: string, id: string, input: UpdateMilestoneDto, actorUserId: string): Promise<Milestone> {
+  async update(
+    initiativeId: string,
+    id: string,
+    input: UpdateMilestoneDto,
+    actorUserId: string,
+  ): Promise<Milestone> {
     return this.withTx(async (tx) => {
-      const existing = await tx.milestone.findFirst({ where: { id, initiativeId, tenantId: this.tenantId } });
+      const existing = await tx.milestone.findFirst({
+        where: { id, initiativeId, tenantId: this.tenantId },
+      });
       if (!existing) throw new NotFoundException(`Milestone ${id} not found`);
 
       const milestone = await tx.milestone.update({
@@ -54,7 +73,12 @@ export class MilestonesRepository extends TenantScopedRepository {
         entityId: milestone.id,
         initiativeId,
         actorUserId,
-        payload: { milestoneId: milestone.id, title: milestone.title, dueDate: milestone.dueDate, status: milestone.status },
+        payload: {
+          milestoneId: milestone.id,
+          title: milestone.title,
+          dueDate: milestone.dueDate,
+          status: milestone.status,
+        },
       });
       return milestone;
     });
@@ -62,7 +86,9 @@ export class MilestonesRepository extends TenantScopedRepository {
 
   async delete(initiativeId: string, id: string): Promise<void> {
     await this.withTx(async (tx) => {
-      const existing = await tx.milestone.findFirst({ where: { id, initiativeId, tenantId: this.tenantId } });
+      const existing = await tx.milestone.findFirst({
+        where: { id, initiativeId, tenantId: this.tenantId },
+      });
       if (!existing) throw new NotFoundException(`Milestone ${id} not found`);
       await tx.milestone.delete({ where: { id } });
     });

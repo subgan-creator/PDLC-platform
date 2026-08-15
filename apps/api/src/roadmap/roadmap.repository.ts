@@ -24,7 +24,9 @@ export class RoadmapRepository extends TenantScopedRepository {
     super(prisma);
   }
 
-  async list(query: RoadmapQueryDto): Promise<{ items: Initiative[]; groups: RoadmapGroup[] | null }> {
+  async list(
+    query: RoadmapQueryDto,
+  ): Promise<{ items: Initiative[]; groups: RoadmapGroup[] | null }> {
     const where: Prisma.InitiativeWhereInput = {
       tenantId: this.tenantId,
       archivedAt: null,
@@ -32,9 +34,7 @@ export class RoadmapRepository extends TenantScopedRepository {
       ...(query.health ? { health: query.health as Initiative['health'] } : {}),
       ...(query.productAreaId ? { productAreaId: query.productAreaId } : {}),
       ...(query.tag ? { tags: { has: query.tag } } : {}),
-      ...(query.q
-        ? { title: { contains: query.q, mode: 'insensitive' as const } }
-        : {}),
+      ...(query.q ? { title: { contains: query.q, mode: 'insensitive' as const } } : {}),
     };
 
     const items = await this.withTx((tx) =>
@@ -51,7 +51,11 @@ export class RoadmapRepository extends TenantScopedRepository {
       const byArea = new Map<string, RoadmapGroup>();
       for (const item of items) {
         const key = item.productAreaId ?? 'unassigned';
-        const group = byArea.get(key) ?? { key, label: key === 'unassigned' ? 'Unassigned' : key, initiativeIds: [] };
+        const group = byArea.get(key) ?? {
+          key,
+          label: key === 'unassigned' ? 'Unassigned' : key,
+          initiativeIds: [],
+        };
         group.initiativeIds.push(item.id);
         byArea.set(key, group);
       }

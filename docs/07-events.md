@@ -12,13 +12,13 @@ Every event shares this shape (`OutboxEvent` in `packages/shared-types`):
 {
   id: string;
   tenantId: string;
-  eventType: string;       // one of the types below
-  entityType: string;      // "Initiative" | "RaidItem" | "Milestone" | ...
+  eventType: string; // one of the types below
+  entityType: string; // "Initiative" | "RaidItem" | "Milestone" | ...
   entityId: string;
   initiativeId: string | null; // denormalized for cheap "everything on initiative X" queries
-  actorUserId: string | null;  // null for system-originated events
-  payload: unknown;        // event-specific, documented below
-  occurredAt: string;      // ISO-8601
+  actorUserId: string | null; // null for system-originated events
+  payload: unknown; // event-specific, documented below
+  occurredAt: string; // ISO-8601
   processedAt: string | null;
 }
 ```
@@ -28,7 +28,14 @@ Every event shares this shape (`OutboxEvent` in `packages/shared-types`):
 ### `initiative.created`
 
 ```ts
-{ initiativeId: string; title: string; slug: string; ownerId: string; productAreaId: string | null; phase: InitiativePhase }
+{
+  initiativeId: string;
+  title: string;
+  slug: string;
+  ownerId: string;
+  productAreaId: string | null;
+  phase: InitiativePhase;
+}
 ```
 
 ### `initiative.updated`
@@ -46,31 +53,53 @@ Fired on any field change via `PATCH /initiatives/:id`, **excluding** health cha
 Split out from the generic `updated` event because health transitions are exactly what My Day (Phase 4) ranks by "needs you today" — a dedicated event type means the Context Engine never has to inspect a generic diff to find out if health moved.
 
 ```ts
-{ initiativeId: string; fromHealth: HealthStatus; toHealth: HealthStatus; reason: string | null }
+{
+  initiativeId: string;
+  fromHealth: HealthStatus;
+  toHealth: HealthStatus;
+  reason: string | null;
+}
 ```
 
 ### `initiative.roadmap_repositioned`
 
 ```ts
-{ initiativeId: string; fromBucket: RoadmapBucket | null; toBucket: RoadmapBucket | null; rank: number }
+{
+  initiativeId: string;
+  fromBucket: RoadmapBucket | null;
+  toBucket: RoadmapBucket | null;
+  rank: number;
+}
 ```
 
 ### `initiative.archived`
 
 ```ts
-{ initiativeId: string }
+{
+  initiativeId: string;
+}
 ```
 
 ### `raid_item.created` / `raid_item.updated`
 
 ```ts
-{ raidItemId: string; type: RaidType; severity: RaidSeverity; status: RaidStatus }
+{
+  raidItemId: string;
+  type: RaidType;
+  severity: RaidSeverity;
+  status: RaidStatus;
+}
 ```
 
 ### `milestone.created` / `milestone.updated`
 
 ```ts
-{ milestoneId: string; title: string; dueDate: string; status: MilestoneStatus }
+{
+  milestoneId: string;
+  title: string;
+  dueDate: string;
+  status: MilestoneStatus;
+}
 ```
 
 ### `status_update.created`
@@ -78,7 +107,12 @@ Split out from the generic `updated` event because health transitions are exactl
 The seam for Phase 8 (Reporting Studio, which reads these as report inputs) and Phase 9 (AI Assist auto-drafting from activity — see `StatusUpdate.draftedFromActivity` in `packages/shared-types`).
 
 ```ts
-{ statusUpdateId: string; periodStart: string; periodEnd: string; healthAtTimeOfUpdate: HealthStatus }
+{
+  statusUpdateId: string;
+  periodStart: string;
+  periodEnd: string;
+  healthAtTimeOfUpdate: HealthStatus;
+}
 ```
 
 ### `comment.created`
@@ -92,7 +126,9 @@ Carries `mentionedUserIds` explicitly so the Phase 4 Unified Inbox consumer does
 ### `watcher.added` / `watcher.removed`
 
 ```ts
-{ userId: string }
+{
+  userId: string;
+}
 ```
 
 ## Adding a new event type

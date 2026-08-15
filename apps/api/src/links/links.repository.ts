@@ -12,7 +12,10 @@ export class LinksRepository extends TenantScopedRepository {
 
   list(initiativeId: string): Promise<InitiativeLink[]> {
     return this.withTx((tx) =>
-      tx.initiativeLink.findMany({ where: { tenantId: this.tenantId, initiativeId }, orderBy: { createdAt: 'desc' } }),
+      tx.initiativeLink.findMany({
+        where: { tenantId: this.tenantId, initiativeId },
+        orderBy: { createdAt: 'desc' },
+      }),
     );
   }
 
@@ -26,7 +29,9 @@ export class LinksRepository extends TenantScopedRepository {
 
   async delete(initiativeId: string, id: string): Promise<void> {
     await this.withTx(async (tx) => {
-      const existing = await tx.initiativeLink.findFirst({ where: { id, initiativeId, tenantId: this.tenantId } });
+      const existing = await tx.initiativeLink.findFirst({
+        where: { id, initiativeId, tenantId: this.tenantId },
+      });
       if (!existing) throw new NotFoundException(`Link ${id} not found`);
       await tx.initiativeLink.delete({ where: { id } });
     });

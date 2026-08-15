@@ -56,7 +56,8 @@ export class ProblemDetailsFilter implements ExceptionFilter {
         typeof body === 'string'
           ? body
           : ((body as { message?: string }).message ?? exception.message);
-      const conflict = typeof body === 'object' && body !== null && 'current' in body ? body.current : undefined;
+      const conflict =
+        typeof body === 'object' && body !== null && 'current' in body ? body.current : undefined;
       return {
         type: `https://pdlc.dev/problems/${slugify(exception.name)}`,
         title: exception.name.replace(/Exception$/, ''),

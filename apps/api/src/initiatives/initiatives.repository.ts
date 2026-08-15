@@ -24,7 +24,12 @@ export interface InitiativeWithRelations extends Initiative {
     unit: string;
     source: string;
   }>;
-  hypotheses: Array<{ id: string; statement: string; confidence: string; validated: boolean | null }>;
+  hypotheses: Array<{
+    id: string;
+    statement: string;
+    confidence: string;
+    validated: boolean | null;
+  }>;
 }
 
 const CAP = 5000; // export/list hard cap — well above the 2,000-initiative scale target in Prompt 1.
@@ -64,7 +69,9 @@ export class InitiativesRepository extends TenantScopedRepository {
           tags: input.tags,
           productAreaId: input.productAreaId,
           dataClassification: input.dataClassification,
-          outcomeMetrics: { create: input.outcomeMetrics.map((m) => ({ ...m, tenantId: this.tenantId })) },
+          outcomeMetrics: {
+            create: input.outcomeMetrics.map((m) => ({ ...m, tenantId: this.tenantId })),
+          },
           hypotheses: { create: input.hypotheses.map((h) => ({ ...h, tenantId: this.tenantId })) },
         },
       });
@@ -173,12 +180,19 @@ export class InitiativesRepository extends TenantScopedRepository {
           entityId: id,
           initiativeId: id,
           actorUserId,
-          payload: { initiativeId: id, fromHealth: before.health, toHealth: updated.health, reason: updated.healthReason },
+          payload: {
+            initiativeId: id,
+            fromHealth: before.health,
+            toHealth: updated.health,
+            reason: updated.healthReason,
+          },
         });
       }
 
       const changedFields = Object.keys(fields).filter(
-        (k) => JSON.stringify((before as Record<string, unknown>)[k]) !== JSON.stringify((updated as Record<string, unknown>)[k]),
+        (k) =>
+          JSON.stringify((before as Record<string, unknown>)[k]) !==
+          JSON.stringify((updated as Record<string, unknown>)[k]),
       );
       if (changedFields.length > 0) {
         await this.outbox.emit(tx, {
@@ -201,7 +215,11 @@ export class InitiativesRepository extends TenantScopedRepository {
     });
   }
 
-  async reposition(id: string, patch: RepositionInitiativeDto, actorUserId: string): Promise<Initiative> {
+  async reposition(
+    id: string,
+    patch: RepositionInitiativeDto,
+    actorUserId: string,
+  ): Promise<Initiative> {
     return this.withTx(async (tx) => {
       const before = await tx.initiative.findFirst({ where: { id, tenantId: this.tenantId } });
       if (!before) throw new NotFoundException(`Initiative ${id} not found`);
@@ -209,7 +227,11 @@ export class InitiativesRepository extends TenantScopedRepository {
 
       const updated = await tx.initiative.update({
         where: { id },
-        data: { roadmapBucket: patch.roadmapBucket, roadmapRank: patch.roadmapRank, version: { increment: 1 } },
+        data: {
+          roadmapBucket: patch.roadmapBucket,
+          roadmapRank: patch.roadmapRank,
+          version: { increment: 1 },
+        },
       });
 
       await this.versions.record(tx, {
@@ -283,7 +305,10 @@ export class InitiativesRepository extends TenantScopedRepository {
    * low-conflict-risk field set (phase/owner/area/tags). A field that needs
    * real conflict protection (health, dates) is not exposed to bulk edit.
    */
-  async bulkUpdate(dto: BulkUpdateInitiativesDto, actorUserId: string): Promise<{ updated: number }> {
+  async bulkUpdate(
+    dto: BulkUpdateInitiativesDto,
+    actorUserId: string,
+  ): Promise<{ updated: number }> {
     return this.withTx(async (tx) => {
       const result = await tx.initiative.updateMany({
         where: { id: { in: dto.ids }, tenantId: this.tenantId },
@@ -318,7 +343,14 @@ export class InitiativesRepository extends TenantScopedRepository {
     return this.withTx(async (tx) => {
       const [target, previous] = await Promise.all([
         tx.entityVersion.findUnique({
-          where: { tenantId_entityType_entityId_version: { tenantId: this.tenantId, entityType: 'Initiative', entityId: id, version } },
+          where: {
+            tenantId_entityType_entityId_version: {
+              tenantId: this.tenantId,
+              entityType: 'Initiative',
+              entityId: id,
+              version,
+            },
+          },
         }),
         tx.entityVersion.findUnique({
           where: {

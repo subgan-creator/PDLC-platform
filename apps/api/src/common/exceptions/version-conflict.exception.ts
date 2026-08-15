@@ -8,6 +8,9 @@ import { HttpException, HttpStatus } from '@nestjs/common';
  */
 export class VersionConflictException extends HttpException {
   constructor(current: unknown) {
-    super({ message: 'The record has changed since you last loaded it.', current }, HttpStatus.CONFLICT);
+    super(
+      { message: 'The record has changed since you last loaded it.', current },
+      HttpStatus.CONFLICT,
+    );
   }
 }

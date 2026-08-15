@@ -14,7 +14,9 @@ export class WatchersRepository extends TenantScopedRepository {
   }
 
   list(initiativeId: string): Promise<InitiativeWatcher[]> {
-    return this.withTx((tx) => tx.initiativeWatcher.findMany({ where: { tenantId: this.tenantId, initiativeId } }));
+    return this.withTx((tx) =>
+      tx.initiativeWatcher.findMany({ where: { tenantId: this.tenantId, initiativeId } }),
+    );
   }
 
   async watch(initiativeId: string, userId: string): Promise<InitiativeWatcher> {
@@ -39,7 +41,9 @@ export class WatchersRepository extends TenantScopedRepository {
 
   async unwatch(initiativeId: string, userId: string): Promise<void> {
     await this.withTx(async (tx) => {
-      await tx.initiativeWatcher.deleteMany({ where: { tenantId: this.tenantId, initiativeId, userId } });
+      await tx.initiativeWatcher.deleteMany({
+        where: { tenantId: this.tenantId, initiativeId, userId },
+      });
       await this.outbox.emit(tx, {
         tenantId: this.tenantId,
         eventType: 'watcher.removed',

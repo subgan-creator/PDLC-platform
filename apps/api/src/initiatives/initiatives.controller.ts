@@ -1,4 +1,15 @@
-import { Body, Controller, Delete, Get, NotFoundException, Param, Patch, Post, Query, Res } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  NotFoundException,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Res,
+} from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { z } from 'zod';
@@ -30,7 +41,9 @@ export class InitiativesController {
 
   @Get()
   @RequirePermission('initiative', 'READ')
-  @ApiOperation({ summary: 'List initiatives — cursor-paginated, filterable, stays responsive at 2k+ rows' })
+  @ApiOperation({
+    summary: 'List initiatives — cursor-paginated, filterable, stays responsive at 2k+ rows',
+  })
   list(@Query(new ZodValidationPipe(listInitiativesQuerySchema)) query: ListInitiativesQueryDto) {
     return this.repo.list(query);
   }
@@ -58,7 +71,19 @@ export class InitiativesController {
         plannedStart: r.plannedStart?.toISOString() ?? null,
         plannedEnd: r.plannedEnd?.toISOString() ?? null,
       })),
-      ['id', 'title', 'slug', 'phase', 'health', 'confidence', 'tshirtSize', 'ownerId', 'productAreaId', 'plannedStart', 'plannedEnd'],
+      [
+        'id',
+        'title',
+        'slug',
+        'phase',
+        'health',
+        'confidence',
+        'tshirtSize',
+        'ownerId',
+        'productAreaId',
+        'plannedStart',
+        'plannedEnd',
+      ],
     );
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename="initiatives.csv"');
@@ -99,7 +124,9 @@ export class InitiativesController {
   @Patch(':id')
   @RequirePermission('initiative', 'UPDATE')
   @AuditLog('UPDATE', 'Initiative')
-  @ApiOperation({ summary: 'Inline-edit an initiative (optimistic concurrency via `version`; 409 on stale write)' })
+  @ApiOperation({
+    summary: 'Inline-edit an initiative (optimistic concurrency via `version`; 409 on stale write)',
+  })
   update(
     @Param('id') id: string,
     @Body(new ZodValidationPipe(updateInitiativeSchema)) body: UpdateInitiativeDto,

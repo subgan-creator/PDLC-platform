@@ -17,10 +17,14 @@ export class ProductAreasRepository extends TenantScopedRepository {
   }
 
   list(): Promise<ProductArea[]> {
-    return this.withTx((tx) => tx.productArea.findMany({ where: { tenantId: this.tenantId }, orderBy: { name: 'asc' } }));
+    return this.withTx((tx) =>
+      tx.productArea.findMany({ where: { tenantId: this.tenantId }, orderBy: { name: 'asc' } }),
+    );
   }
 
   create(input: CreateProductAreaDto): Promise<ProductArea> {
-    return this.withTx((tx) => tx.productArea.create({ data: { tenantId: this.tenantId, ...input } }));
+    return this.withTx((tx) =>
+      tx.productArea.create({ data: { tenantId: this.tenantId, ...input } }),
+    );
   }
 }
