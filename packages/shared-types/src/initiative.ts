@@ -3,7 +3,6 @@ import type {
   ControlMappable,
   Id,
   ISODateTimeString,
-  PortfolioPlaceable,
   StageGated,
   TenantScoped,
   Timestamped,
@@ -12,96 +11,206 @@ import type {
 } from './common';
 
 export type InitiativeId = Id<'Initiative'>;
+export type ProductAreaId = Id<'ProductArea'>;
 
 /**
- * The spine of the system (A3, JTBD 2). Every downstream module (Discovery,
- * Definition, Experience, Launch, Reporting, Quality) hangs off an
- * Initiative. Carries v2 fields (portfolio, stage gate, controls) from
+ * The portfolio parent hook for the Initiative (A2/A8 Phase 1 note: nullable
+ * today, becomes the Area Product Owner's scope in v2 persona expansion).
+ * Deliberately minimal — a name and a key — until Phase 11 needs more.
+ */
+export interface ProductArea extends Timestamped, TenantScoped {
+  id: ProductAreaId;
+  key: string;
+  name: string;
+  businessLineId: Id<'BusinessLine'> | null;
+}
+
+export type InitiativePhase = 'discovery' | 'definition' | 'build' | 'launch' | 'adopt' | 'done';
+
+export type HealthStatus = 'green' | 'amber' | 'red';
+
+export type Confidence = 'low' | 'medium' | 'high';
+
+export type TShirtSize = 'xs' | 's' | 'm' | 'l' | 'xl';
+
+export type RaciRole = 'responsible' | 'accountable' | 'consulted' | 'informed';
+
+/** Manual PM placement on the roadmap — distinct from `phase`, which tracks lifecycle state, not roadmap priority. */
+export type RoadmapBucket = 'now' | 'next' | 'later';
+
+/**
+ * The spine of the system (A3, JTBD 2; Prompt 1). Every downstream module
+ * (Discovery, Definition, Experience, Launch, Reporting, Quality) hangs off
+ * an Initiative. Carries v2 fields (portfolio, stage gate, controls) from
  * Phase 0 per the "no churn later" rule.
  */
 export interface Initiative
-  extends
-    Timestamped,
+  extends Timestamped,
     TenantScoped,
     Classified,
     StageGated,
-    PortfolioPlaceable,
     ControlMappable,
     Versioned {
   id: InitiativeId;
-  key: string; // human-readable short code, e.g. "INIT-142"
   title: string;
+  slug: string;
   problemStatement: string;
-  ownerId: UserId; // the PM
+
   phase: InitiativePhase;
-  health: InitiativeHealth;
-  targetOutcomes: OutcomeMetric[];
-  hypotheses: Hypothesis[];
-  scopeItems: ScopeItem[];
-  raidItems: RaidItem[];
-  stakeholders: InitiativeStakeholder[];
-  /** Opportunity this initiative was promoted from, if any — preserves the "why" trail (JTBD 1). */
+  health: HealthStatus;
+  /** Required by the API whenever `health !== 'green'` — enforced at the Zod boundary, not just in the UI. */
+  healthReason: string | null;
+  confidence: Confidence;
+  tshirtSize: TShirtSize;
+
+  scope: string;
+  /** Explicit non-scope — what this initiative deliberately does NOT cover. */
+  nonScope: string;
+
+  plannedStart: ISODateTimeString | null;
+  plannedEnd: ISODateTimeString | null;
+  actualStart: ISODateTimeString | null;
+  actualEnd: ISODateTimeString | null;
+
+  ownerId: UserId;
+  businessSponsorId: UserId | null;
+  contributingTeams: string[];
+  tags: string[];
+
+  productAreaId: ProductAreaId | null;
+  /** Trail preserved from Discovery (JTBD 1) once that module ships — no FK yet, Opportunity doesn't exist until Phase 2. */
   sourceOpportunityId: Id<'Opportunity'> | null;
-  startDate: ISODateTimeString | null;
-  targetDate: ISODateTimeString | null;
+
+  roadmapBucket: RoadmapBucket | null;
+  /** Fractional/sparse rank for stable drag-to-reorder within a bucket; recomputed lazily, never renumbered on every write. */
+  roadmapRank: number | null;
+
   archivedAt: ISODateTimeString | null;
 }
 
-export type InitiativePhase =
-  'discovery' | 'definition' | 'design' | 'build' | 'launch' | 'post_launch' | 'closed';
-
-export type InitiativeHealth = 'on_track' | 'at_risk' | 'off_track' | 'unknown';
-
 export interface OutcomeMetric {
   id: Id<'OutcomeMetric'>;
-  name: string;
+  initiativeId: InitiativeId;
+  metricName: string;
   baseline: number | null;
   target: number;
   current: number | null;
   unit: string;
-  /** External metrics-tool source (Amplitude/Mixpanel/Tableau/Power BI) once Integration Service ships. */
-  sourceConnectorId: Id<'ConnectorInstance'> | null;
+  /** Free-text today; becomes a connector reference once Amplitude/Mixpanel/Tableau/Power BI pull lands (A6). */
+  source: string;
 }
 
 export interface Hypothesis {
   id: Id<'Hypothesis'>;
-  statement: string; // "We believe that ... will result in ... "
-  confidence: 'low' | 'medium' | 'high';
+  initiativeId: InitiativeId;
+  statement: string; // "We believe that ... will result in ..."
+  confidence: Confidence;
   validated: boolean | null; // null = not yet tested
-}
-
-export interface ScopeItem {
-  id: Id<'ScopeItem'>;
-  description: string;
-  inScope: boolean;
 }
 
 export type RaidType = 'risk' | 'assumption' | 'issue' | 'dependency';
 export type RaidSeverity = 'low' | 'medium' | 'high' | 'critical';
+export type RaidStatus = 'open' | 'mitigated' | 'closed';
 
-export interface RaidItem {
+export interface RaidItem extends Timestamped {
   id: Id<'RaidItem'>;
+  initiativeId: InitiativeId;
   type: RaidType;
   description: string;
   severity: RaidSeverity;
   ownerId: UserId | null;
-  status: 'open' | 'mitigated' | 'closed';
   dueDate: ISODateTimeString | null;
+  mitigation: string | null;
+  status: RaidStatus;
+}
+
+export type MilestoneStatus = 'planned' | 'done' | 'missed';
+
+export interface Milestone extends Timestamped {
+  id: Id<'Milestone'>;
+  initiativeId: InitiativeId;
+  title: string;
+  dueDate: ISODateTimeString;
+  status: MilestoneStatus;
+  description: string | null;
+}
+
+/**
+ * Structured periodic update — the input to the Reporting Studio (JTBD 6,
+ * Phase 8). `progress/next/risks/asks` map directly onto report sections.
+ * Auto-drafting this from the last two weeks of activity is a Phase 9 (AI
+ * Assist) concern — `draftedFromActivity` is the seam for it: null today,
+ * an AiDraftProvenance-shaped record once that lands.
+ */
+export interface StatusUpdate {
+  id: Id<'StatusUpdate'>;
+  initiativeId: InitiativeId;
+  authoredBy: UserId;
+  periodStart: ISODateTimeString;
+  periodEnd: ISODateTimeString;
+  progress: string;
+  next: string;
+  risks: string;
+  asks: string;
+  healthAtTimeOfUpdate: HealthStatus;
+  createdAt: ISODateTimeString;
+  draftedFromActivity: unknown | null;
+}
+
+export type LinkTargetType =
+  | 'external_url'
+  | 'story'
+  | 'figma_frame'
+  | 'confluence_page'
+  | 'jira_issue'
+  | 'other';
+
+/** Typed link from an Initiative to any other entity or an external URL. */
+export interface InitiativeLink extends Timestamped {
+  id: Id<'InitiativeLink'>;
+  initiativeId: InitiativeId;
+  targetType: LinkTargetType;
+  targetId: string | null; // internal entity id, when targetType isn't external_url/other
+  url: string | null; // required when targetType is external_url
+  label: string;
+  createdBy: UserId;
+}
+
+/** Threaded comment with @mentions — mentions feed the Unified Inbox once Phase 4 ships. */
+export interface InitiativeComment {
+  id: Id<'InitiativeComment'>;
+  initiativeId: InitiativeId;
+  parentCommentId: Id<'InitiativeComment'> | null;
+  authorId: UserId;
+  body: string;
+  mentionedUserIds: UserId[];
+  createdAt: ISODateTimeString;
+  editedAt: ISODateTimeString | null;
+  deletedAt: ISODateTimeString | null;
+}
+
+export interface InitiativeWatcher {
+  initiativeId: InitiativeId;
+  userId: UserId;
+  createdAt: ISODateTimeString;
 }
 
 export interface InitiativeStakeholder {
+  initiativeId: InitiativeId;
   userId: UserId;
-  roleOnInitiative: 'sponsor' | 'approver' | 'contributor' | 'informed';
+  raciRole: RaciRole;
 }
 
 /**
  * Roadmap view model (Now/Next/Later + capacity-aware timeline). Derived
- * from Initiative rows, not a separate source of truth — kept here as the
- * shape the roadmap API returns.
+ * from Initiative rows (`roadmapBucket`/`roadmapRank`/`plannedStart`/
+ * `plannedEnd`), not a separate source of truth — kept here as the shape
+ * the roadmap API returns.
  */
 export interface RoadmapEntry {
   initiativeId: InitiativeId;
-  bucket: 'now' | 'next' | 'later';
+  bucket: RoadmapBucket;
+  rank: number;
   plannedStart: ISODateTimeString | null;
   plannedEnd: ISODateTimeString | null;
   teamCapacityPoints: number | null;

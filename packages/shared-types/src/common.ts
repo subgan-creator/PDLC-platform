@@ -39,6 +39,8 @@ export interface ProblemDetails {
   instance?: string;
   requestId?: string;
   errors?: Array<{ field: string; message: string }>;
+  /** Present on 409s from an optimistic-concurrency conflict — the current record, for a client-side merge prompt. */
+  conflict?: unknown;
 }
 
 /**

@@ -17,3 +17,4 @@ export * from './reporting';
 export * from './quality';
 export * from './context-engine';
 export * from './integration';
+export * from './outbox';

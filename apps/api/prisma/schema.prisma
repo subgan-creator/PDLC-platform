@@ -73,6 +73,20 @@ model Tenant {
   userRoles   UserRole[]
   attachments Attachment[]
 
+  productAreas           ProductArea[]
+  initiatives            Initiative[]
+  outcomeMetrics         OutcomeMetric[]
+  hypotheses             Hypothesis[]
+  raidItems              RaidItem[]
+  milestones             Milestone[]
+  statusUpdates          StatusUpdate[]
+  initiativeLinks        InitiativeLink[]
+  initiativeComments     InitiativeComment[]
+  initiativeWatchers     InitiativeWatcher[]
+  initiativeStakeholders InitiativeStakeholder[]
+  entityVersions         EntityVersion[]
+  outboxEvents           OutboxEvent[]
+
   @@map("tenants")
   @@schema("public")
 }
@@ -160,7 +174,7 @@ enum PermissionAction {
 /// Global catalogue (not tenant-scoped) — the set of resource+action pairs the
 /// platform knows how to guard. `@RequirePermission()` checks against this.
 model Permission {
-  id          String            @id @default(uuid())
+  id          String           @id @default(uuid())
   resource    String
   action      PermissionAction
   description String
@@ -228,9 +242,9 @@ enum VirusScanStatus {
 }
 
 model Attachment {
-  id                 String              @id @default(uuid())
+  id                 String             @id @default(uuid())
   tenantId           String
-  tenant             Tenant              @relation(fields: [tenantId], references: [id])
+  tenant             Tenant             @relation(fields: [tenantId], references: [id])
   /// Polymorphic owner — the entity this file is attached to (e.g. "Story", "Initiative").
   ownerType          String
   ownerId            String
@@ -243,11 +257,427 @@ model Attachment {
   uploadedBy         String
   dataClassification DataClassification @default(INTERNAL)
   virusScanStatus    VirusScanStatus    @default(PENDING)
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
 
   @@index([tenantId, ownerType, ownerId])
   @@map("attachments")
+  @@schema("public")
+}
+
+// ---------------------------------------------------------------------------
+// Initiative Workspace + Roadmap (Phase 1, A8 / Prompt 1) — the spine.
+// ---------------------------------------------------------------------------
+
+/// Portfolio parent hook (nullable) — becomes the Area Product Owner's scope
+/// in v2 (Phase 11). Deliberately minimal until then.
+model ProductArea {
+  id             String   @id @default(uuid())
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id])
+  key            String
+  name           String
+  businessLineId String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  initiatives Initiative[]
+
+  @@unique([tenantId, key])
+  @@index([tenantId])
+  @@map("product_areas")
+  @@schema("public")
+}
+
+enum InitiativePhase {
+  DISCOVERY
+  DEFINITION
+  BUILD
+  LAUNCH
+  ADOPT
+  DONE
+
+  @@schema("public")
+}
+
+enum HealthStatus {
+  GREEN
+  AMBER
+  RED
+
+  @@schema("public")
+}
+
+enum Confidence {
+  LOW
+  MEDIUM
+  HIGH
+
+  @@schema("public")
+}
+
+enum TShirtSize {
+  XS
+  S
+  M
+  L
+  XL
+
+  @@schema("public")
+}
+
+enum RaciRole {
+  RESPONSIBLE
+  ACCOUNTABLE
+  CONSULTED
+  INFORMED
+
+  @@schema("public")
+}
+
+/// Manual PM placement on the roadmap — distinct from `phase` (lifecycle
+/// state) and independent of it; a DONE initiative can still show in Later
+/// briefly before someone archives it.
+enum RoadmapBucket {
+  NOW
+  NEXT
+  LATER
+
+  @@schema("public")
+}
+
+model Initiative {
+  id       String @id @default(uuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  title            String
+  slug             String
+  problemStatement String
+
+  phase        InitiativePhase @default(DISCOVERY)
+  health       HealthStatus    @default(GREEN)
+  /// Required by the API whenever health != GREEN — enforced in the Zod DTO, not just here.
+  healthReason String?
+  confidence   Confidence      @default(MEDIUM)
+  tshirtSize   TShirtSize      @default(M)
+
+  scope    String
+  nonScope String
+
+  plannedStart DateTime?
+  plannedEnd   DateTime?
+  actualStart  DateTime?
+  actualEnd    DateTime?
+
+  ownerId           String
+  businessSponsorId String?
+  contributingTeams String[]
+  tags              String[]
+
+  productAreaId       String?
+  productArea         ProductArea? @relation(fields: [productAreaId], references: [id])
+  sourceOpportunityId String?
+
+  roadmapBucket RoadmapBucket?
+  roadmapRank   Float?
+
+  /// Forward-declared for v2 governance (Phase 11) — see StageGateStatus in shared-types.
+  stageGateStatus    String             @default("not_applicable")
+  /// Forward-declared for JTBD 4c control mapping — array of Control ids, none exist until Phase 3.
+  controlIds         String[]
+  dataClassification DataClassification @default(INTERNAL)
+
+  version    Int       @default(1)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  archivedAt DateTime?
+
+  outcomeMetrics OutcomeMetric[]
+  hypotheses     Hypothesis[]
+  raidItems      RaidItem[]
+  milestones     Milestone[]
+  statusUpdates  StatusUpdate[]
+  links          InitiativeLink[]
+  comments       InitiativeComment[]
+  watchers       InitiativeWatcher[]
+  stakeholders   InitiativeStakeholder[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@index([tenantId, phase])
+  @@index([tenantId, productAreaId])
+  @@index([tenantId, ownerId])
+  @@index([tenantId, roadmapBucket])
+  @@map("initiatives")
+  @@schema("public")
+}
+
+model OutcomeMetric {
+  id           String     @id @default(uuid())
+  tenantId     String
+  tenant       Tenant     @relation(fields: [tenantId], references: [id])
+  initiativeId String
+  initiative   Initiative @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  metricName   String
+  baseline     Float?
+  target       Float
+  current      Float?
+  unit         String
+  /// Free text today; becomes a connector reference once outcome-metric pull connectors land (A6).
+  source       String
+
+  @@index([tenantId, initiativeId])
+  @@map("outcome_metrics")
+  @@schema("public")
+}
+
+model Hypothesis {
+  id           String     @id @default(uuid())
+  tenantId     String
+  tenant       Tenant     @relation(fields: [tenantId], references: [id])
+  initiativeId String
+  initiative   Initiative @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  statement    String
+  confidence   Confidence @default(MEDIUM)
+  validated    Boolean?
+
+  @@index([tenantId, initiativeId])
+  @@map("hypotheses")
+  @@schema("public")
+}
+
+enum RaidType {
+  RISK
+  ASSUMPTION
+  ISSUE
+  DEPENDENCY
+
+  @@schema("public")
+}
+
+enum RaidSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+
+  @@schema("public")
+}
+
+enum RaidStatus {
+  OPEN
+  MITIGATED
+  CLOSED
+
+  @@schema("public")
+}
+
+model RaidItem {
+  id           String     @id @default(uuid())
+  tenantId     String
+  tenant       Tenant     @relation(fields: [tenantId], references: [id])
+  initiativeId String
+  initiative   Initiative @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+
+  type        RaidType
+  description String
+  severity    RaidSeverity
+  ownerId     String?
+  dueDate     DateTime?
+  mitigation  String?
+  status      RaidStatus   @default(OPEN)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, initiativeId])
+  @@map("raid_items")
+  @@schema("public")
+}
+
+enum MilestoneStatus {
+  PLANNED
+  DONE
+  MISSED
+
+  @@schema("public")
+}
+
+model Milestone {
+  id           String     @id @default(uuid())
+  tenantId     String
+  tenant       Tenant     @relation(fields: [tenantId], references: [id])
+  initiativeId String
+  initiative   Initiative @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+
+  title       String
+  dueDate     DateTime
+  status      MilestoneStatus @default(PLANNED)
+  description String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, initiativeId])
+  @@map("milestones")
+  @@schema("public")
+}
+
+/// Structured periodic update — the input to the Reporting Studio (Phase 8).
+/// Immutable once created: corrections are new rows, never edits.
+model StatusUpdate {
+  id           String     @id @default(uuid())
+  tenantId     String
+  tenant       Tenant     @relation(fields: [tenantId], references: [id])
+  initiativeId String
+  initiative   Initiative @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+
+  authoredBy           String
+  periodStart          DateTime
+  periodEnd            DateTime
+  progress             String
+  next                 String
+  risks                String
+  asks                 String
+  healthAtTimeOfUpdate HealthStatus
+  /// Seam for Phase 9 AI Assist auto-drafting from the last two weeks of activity — null until that exists.
+  draftedFromActivity  Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, initiativeId])
+  @@map("status_updates")
+  @@schema("public")
+}
+
+enum LinkTargetType {
+  EXTERNAL_URL
+  STORY
+  FIGMA_FRAME
+  CONFLUENCE_PAGE
+  JIRA_ISSUE
+  OTHER
+
+  @@schema("public")
+}
+
+model InitiativeLink {
+  id           String     @id @default(uuid())
+  tenantId     String
+  tenant       Tenant     @relation(fields: [tenantId], references: [id])
+  initiativeId String
+  initiative   Initiative @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+
+  targetType LinkTargetType
+  targetId   String?
+  url        String?
+  label      String
+  createdBy  String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, initiativeId])
+  @@map("initiative_links")
+  @@schema("public")
+}
+
+/// Threaded comment with @mentions. `mentionedUserIds` feeds the Unified
+/// Inbox once Phase 4 ships; for now it's just stored.
+model InitiativeComment {
+  id              String              @id @default(uuid())
+  tenantId        String
+  tenant          Tenant              @relation(fields: [tenantId], references: [id])
+  initiativeId    String
+  initiative      Initiative          @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  parentCommentId String?
+  parentComment   InitiativeComment?  @relation("CommentReplies", fields: [parentCommentId], references: [id])
+  replies         InitiativeComment[] @relation("CommentReplies")
+
+  authorId         String
+  body             String
+  mentionedUserIds String[]
+
+  createdAt DateTime  @default(now())
+  editedAt  DateTime?
+  deletedAt DateTime?
+
+  @@index([tenantId, initiativeId])
+  @@index([tenantId, parentCommentId])
+  @@map("initiative_comments")
+  @@schema("public")
+}
+
+model InitiativeWatcher {
+  tenantId     String
+  tenant       Tenant     @relation(fields: [tenantId], references: [id])
+  initiativeId String
+  initiative   Initiative @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  userId       String
+  createdAt    DateTime   @default(now())
+
+  @@id([initiativeId, userId])
+  @@index([tenantId])
+  @@map("initiative_watchers")
+  @@schema("public")
+}
+
+model InitiativeStakeholder {
+  tenantId     String
+  tenant       Tenant     @relation(fields: [tenantId], references: [id])
+  initiativeId String
+  initiative   Initiative @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  userId       String
+  raciRole     RaciRole
+
+  @@id([initiativeId, userId, raciRole])
+  @@index([tenantId])
+  @@map("initiative_stakeholders")
+  @@schema("public")
+}
+
+/// Full version history with diff & restore (A5). One row per write, whole-
+/// record snapshot — diffing happens on read (see VersionsService), not on
+/// write, so a new field never needs a migration to old rows.
+model EntityVersion {
+  id            String   @id @default(uuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id])
+  entityType    String
+  entityId      String
+  version       Int
+  snapshot      Json
+  changedBy     String
+  changedAt     DateTime @default(now())
+  changeSummary String?
+
+  @@unique([tenantId, entityType, entityId, version])
+  @@index([tenantId, entityType, entityId])
+  @@map("entity_versions")
+  @@schema("public")
+}
+
+/// Transactional outbox (A7). Written in the SAME transaction as the
+/// mutation it describes — see OutboxService — so an event is never lost
+/// even if nothing has consumed it yet (nothing does, until Phase 4).
+model OutboxEvent {
+  id           String    @id @default(uuid())
+  tenantId     String
+  tenant       Tenant    @relation(fields: [tenantId], references: [id])
+  eventType    String
+  entityType   String
+  entityId     String
+  initiativeId String?
+  actorUserId  String?
+  payload      Json
+  occurredAt   DateTime  @default(now())
+  processedAt  DateTime?
+
+  @@index([tenantId, occurredAt])
+  @@index([tenantId, processedAt])
+  @@index([tenantId, initiativeId])
+  @@map("outbox_events")
   @@schema("public")
 }
 
