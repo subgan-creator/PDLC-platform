@@ -11,6 +11,18 @@ import { RbacModule } from './rbac/rbac.module';
 import { AuditModule } from './audit/audit.module';
 import { HealthModule } from './health/health.module';
 import { UsersModule } from './users/users.module';
+import { OutboxModule } from './outbox/outbox.module';
+import { VersionsModule } from './versioning/versions.module';
+import { ProductAreasModule } from './product-areas/product-areas.module';
+import { InitiativesModule } from './initiatives/initiatives.module';
+import { RaidModule } from './raid/raid.module';
+import { MilestonesModule } from './milestones/milestones.module';
+import { StatusUpdatesModule } from './status-updates/status-updates.module';
+import { LinksModule } from './links/links.module';
+import { CommentsModule } from './comments/comments.module';
+import { WatchersModule } from './watchers/watchers.module';
+import { ActivityModule } from './activity/activity.module';
+import { RoadmapModule } from './roadmap/roadmap.module';
 
 @Module({
   imports: [
@@ -28,6 +40,8 @@ import { UsersModule } from './users/users.module';
     }),
     ConfigModule,
     PrismaModule,
+    OutboxModule,
+    VersionsModule,
     // Order matters: AuthGuard (identifies the caller) must run before
     // RbacGuard (authorizes the caller), and AuditModule's interceptor
     // must see the response after both.
@@ -36,6 +50,17 @@ import { UsersModule } from './users/users.module';
     AuditModule,
     HealthModule,
     UsersModule,
+    // Phase 1 — Initiative Workspace + Roadmap (the spine, A8/Prompt 1).
+    ProductAreasModule,
+    InitiativesModule,
+    RaidModule,
+    MilestonesModule,
+    StatusUpdatesModule,
+    LinksModule,
+    CommentsModule,
+    WatchersModule,
+    ActivityModule,
+    RoadmapModule,
   ],
   providers: [{ provide: APP_FILTER, useClass: ProblemDetailsFilter }],
 })
