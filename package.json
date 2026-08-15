@@ -10,6 +10,7 @@
   },
   "packageManager": "pnpm@9.15.9",
   "scripts": {
+    "setup": "bash scripts/setup-local.sh",
     "build": "turbo run build",
     "dev": "turbo run dev --parallel",
     "lint": "turbo run lint",
