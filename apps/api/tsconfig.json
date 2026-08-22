@@ -4,12 +4,15 @@
   // pulls those packages' files into this compilation. An explicit
   // rootDir: "src" would make tsc error (TS6059) on every file outside
   // src. Leaving rootDir unset lets tsc infer the lowest common ancestor
-  // (the monorepo root) instead — the tradeoff is `nest build`'s output
-  // lands at dist/apps/api/src/main.js, not dist/main.js. `dev` runs via
-  // ts-node (see package.json) — NOT tsx/esbuild, because esbuild strips
-  // decorators without resolving emitDecoratorMetadata, which NestJS's DI
-  // needs to inject undecorated params like Reflector. `start`'s path
-  // accounts for the dist nesting — see package.json before changing this.
+  // instead. This no longer affects `nest build`'s output layout the way
+  // it once did — see webpack.config.js: production builds go through
+  // webpack/ts-loader (dist/main.js, one self-contained bundle with
+  // @pdlc/* inlined), not raw `tsc`, specifically so the compiled output
+  // doesn't carry a runtime dependency on the workspace packages' raw,
+  // unbuilt TS source. `dev` runs via ts-node (see package.json) — NOT
+  // tsx/esbuild, because esbuild strips decorators without resolving
+  // emitDecoratorMetadata, which NestJS's DI needs to inject undecorated
+  // params like Reflector.
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "module": "CommonJS",
