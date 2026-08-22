@@ -1,3 +1,8 @@
+// dotenv MUST load before anything below reads process.env. Silently does
+// nothing if there's no .env file (real deployments get env vars injected
+// by the platform instead), so this is always safe to import.
+import 'dotenv/config';
+
 import { loadEnv } from '@pdlc/config';
 import { Worker } from 'bullmq';
 import { Redis } from 'ioredis';

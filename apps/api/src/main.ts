@@ -1,6 +1,22 @@
+// reflect-metadata MUST be the very first import: it polyfills the global
+// Reflect.getMetadata/defineMetadata that emitDecoratorMetadata relies on.
+// Without it, every constructor-injected dependency that isn't explicitly
+// @Inject()-annotated (Reflector, PrismaService, ...) silently resolves to
+// undefined instead of throwing — which is a much nastier failure mode
+// than a missing-import error, so don't be tempted to drop this because
+// "nothing seems to use it directly".
+import 'reflect-metadata';
+
+// dotenv MUST load next — before OpenTelemetry reads OTEL_* env vars
+// right below, and before anything else touches process.env. Silently
+// does nothing if there's no .env file (e.g. real deployments, which get
+// env vars injected by the platform instead), so this is always safe.
+import 'dotenv/config';
+
 // OpenTelemetry MUST start before anything else is imported so
 // auto-instrumentation can patch http/express/@prisma/client. Do not move
-// this below the other imports, and do not add imports above it.
+// this below the other imports, and do not add imports above it (other
+// than the dotenv import above, which must run first).
 import { startOtel } from './observability/otel';
 startOtel();
 

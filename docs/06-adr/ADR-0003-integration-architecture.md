@@ -14,7 +14,7 @@ A6 requires bi-directional sync with a long list of enterprise systems (Jira, Se
 - **Conflict resolution is configured per field**, not hardcoded per connector: `platform_wins` / `external_wins` / `last_write_wins` / `manual_review` (`ConflictResolutionPolicy`). Different fields on the same entity can have different policies (e.g. platform owns "why", Jira owns sprint/status).
 - **Deployment mode is a first-class enum from day one**: `ConnectorInstance.deploymentMode` is `cloud | self_hosted_agent` even though only `cloud` is implementable before Phase 5. A bank customer's self-hosted agent is an outbound-only proxy inside their network; the platform never needs inbound access to a customer's environment. Modeling this now means the eventual self-hosted agent is a new deployment target for the same connector code, not a rewrite of the connector contract.
 - **The public API is the only API.** Every internal feature (including the web app) calls the same OpenAPI 3.1 surface that external integrators and connectors use — no privileged internal-only endpoints. This is enforced by convention today (`apps/api`'s Swagger doc at `/api/docs` is the one surface); Phase 5 is where connectors start exercising it as clients rather than the web app being the only consumer.
-- **Jobs run on the worker, not inline in request handlers.** Connector pull/push/webhook processing is queue-backed (`pdlc:connector-sync` in `apps/worker/src/queues.ts`) so a slow or down external system never blocks an API request.
+- **Jobs run on the worker, not inline in request handlers.** Connector pull/push/webhook processing is queue-backed (`pdlc.connector-sync` in `apps/worker/src/queues.ts`) so a slow or down external system never blocks an API request.
 
 ## Consequences
 

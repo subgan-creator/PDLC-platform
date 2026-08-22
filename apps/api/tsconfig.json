@@ -1,4 +1,15 @@
 {
+  // No "rootDir" here on purpose — apps/api imports @pdlc/shared-types and
+  // @pdlc/config as raw TS source (via tsconfig.base.json's "paths"), which
+  // pulls those packages' files into this compilation. An explicit
+  // rootDir: "src" would make tsc error (TS6059) on every file outside
+  // src. Leaving rootDir unset lets tsc infer the lowest common ancestor
+  // (the monorepo root) instead — the tradeoff is `nest build`'s output
+  // lands at dist/apps/api/src/main.js, not dist/main.js. `dev` runs via
+  // ts-node (see package.json) — NOT tsx/esbuild, because esbuild strips
+  // decorators without resolving emitDecoratorMetadata, which NestJS's DI
+  // needs to inject undecorated params like Reflector. `start`'s path
+  // accounts for the dist nesting — see package.json before changing this.
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "module": "CommonJS",
@@ -9,5 +20,36 @@
     "emitDecoratorMetadata": true,
     "strictPropertyInitialization": false
   },
-  "include": ["src", "prisma"]
+  "include": ["src", "prisma"],
+  // ts-node normally only compiles files reachable via the import graph
+  // from the entry point, unlike `tsc -p` which compiles everything
+  // matched by "include" above. src/types/express.d.ts is a pure ambient
+  // declaration (declare global { namespace Express { ... } }) that
+  // nothing ever imports — it's meant to be picked up by "include", not
+  // required. Without "files": true, ts-node never loads it, and
+  // req.authUser (set in auth.guard.ts) fails to compile under `dev`
+  // even though `pnpm typecheck` (tsc -p) is completely clean. Also
+  // passed as --files on the CLI in package.json's "dev" script as a
+  // belt-and-suspenders in case this block is ever bypassed.
+  "ts-node": {
+    "files": true,
+    // packages/* are authored as plain ESM ("type": "module" in their own
+    // package.json — correct for their other consumers: apps/worker and
+    // apps/web both run them through ESM-native tools (tsx, Vite) that
+    // don't care about this ambiguity). apps/api is CommonJS and consumes
+    // these packages as raw .ts source via tsconfig.base.json's path
+    // mapping, and ts-node's classic (CJS) loader refuses to `require()`
+    // a file whose nearest package.json says "type": "module"
+    // (ERR_REQUIRE_ESM) — it won't silently guess. This override tells
+    // ts-node "compile anything under packages/ as CJS for this program,
+    // ignore its package.json". Don't try to fix this by flipping
+    // packages/*/package.json to "type": "commonjs" instead — that was
+    // tried and it breaks the ESM consumers (Node's cjs-module-lexer
+    // can't statically detect named exports from raw, untranspiled TS
+    // source, so `import { x } from '@pdlc/config'` silently resolves to
+    // undefined under tsx/Vite).
+    "moduleTypes": {
+      "../../packages/**": "cjs"
+    }
+  }
 }

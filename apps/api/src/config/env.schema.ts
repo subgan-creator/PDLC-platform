@@ -1,4 +1,4 @@
-import { baseEnvSchema } from '@pdlc/config';
+import { baseEnvSchema, optionalEnv } from '@pdlc/config';
 import { z } from 'zod';
 
 /**
@@ -11,16 +11,16 @@ export const apiEnvSchema = baseEnvSchema.extend({
   // OIDC (A5 identity & access). In dev mode, AUTH_MODE=dev-stub bypasses
   // real OIDC and trusts an `x-dev-user-id` header — see auth/dev-stub.strategy.ts.
   AUTH_MODE: z.enum(['oidc', 'dev-stub']).default('dev-stub'),
-  OIDC_ISSUER_URL: z.string().url().optional(),
-  OIDC_CLIENT_ID: z.string().optional(),
-  OIDC_AUDIENCE: z.string().optional(),
+  OIDC_ISSUER_URL: optionalEnv(z.string().url()),
+  OIDC_CLIENT_ID: optionalEnv(z.string()),
+  OIDC_AUDIENCE: optionalEnv(z.string()),
 
   // Object storage (S3-compatible; LocalStack in dev).
-  S3_ENDPOINT: z.string().url().optional(),
+  S3_ENDPOINT: optionalEnv(z.string().url()),
   S3_BUCKET: z.string().default('pdlc-attachments'),
   S3_REGION: z.string().default('us-east-1'),
 
-  OPENSEARCH_URL: z.string().url().optional(),
+  OPENSEARCH_URL: optionalEnv(z.string().url()),
 
   CORS_ORIGIN: z.string().default('http://localhost:5173'),
 });

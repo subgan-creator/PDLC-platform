@@ -33,4 +33,4 @@ The platform is the system of record for product thinking and a system of engage
 
 ## Where jobs run
 
-Connector pull/push/webhook processing runs on `apps/worker` via the `pdlc:connector-sync` BullMQ queue (name reserved in `apps/worker/src/queues.ts`, no processor yet).
+Connector pull/push/webhook processing runs on `apps/worker` via the `pdlc.connector-sync` BullMQ queue (name reserved in `apps/worker/src/queues.ts`, no processor yet).
