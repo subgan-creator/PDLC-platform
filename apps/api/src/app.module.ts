@@ -25,6 +25,12 @@ import { WatchersModule } from './watchers/watchers.module';
 import { StakeholdersModule } from './stakeholders/stakeholders.module';
 import { ActivityModule } from './activity/activity.module';
 import { RoadmapModule } from './roadmap/roadmap.module';
+// Phase 2 — Discovery Hub (JTBD 1, A8/Prompt 2).
+import { SourcesModule } from './sources/sources.module';
+import { EvidenceModule } from './evidence/evidence.module';
+import { InsightsModule } from './insights/insights.module';
+import { OpportunitiesModule } from './opportunities/opportunities.module';
+import { SolutionTreeModule } from './solution-tree/solution-tree.module';
 
 @Module({
   imports: [
@@ -65,6 +71,12 @@ import { RoadmapModule } from './roadmap/roadmap.module';
     StakeholdersModule,
     ActivityModule,
     RoadmapModule,
+    // Phase 2 — Discovery Hub (JTBD 1, A8/Prompt 2).
+    SourcesModule,
+    EvidenceModule,
+    InsightsModule,
+    OpportunitiesModule,
+    SolutionTreeModule,
   ],
   providers: [{ provide: APP_FILTER, useClass: ProblemDetailsFilter }],
 })

@@ -45,66 +45,83 @@ export class InitiativesRepository extends TenantScopedRepository {
   }
 
   async create(input: CreateInitiativeDto, actorUserId: string): Promise<Initiative> {
-    return this.withTx(async (tx) => {
-      const slug = await this.uniqueSlug(tx, input.title);
+    return this.withTx((tx) => this.createWithTx(tx, input, actorUserId));
+  }
 
-      const initiative = await tx.initiative.create({
-        data: {
-          tenantId: this.tenantId,
-          title: input.title,
-          slug,
-          problemStatement: input.problemStatement,
-          phase: input.phase,
-          health: input.health,
-          healthReason: input.healthReason,
-          confidence: input.confidence,
-          tshirtSize: input.tshirtSize,
-          scope: input.scope,
-          nonScope: input.nonScope,
-          plannedStart: input.plannedStart ? new Date(input.plannedStart) : null,
-          plannedEnd: input.plannedEnd ? new Date(input.plannedEnd) : null,
-          ownerId: input.ownerId,
-          businessSponsorId: input.businessSponsorId,
-          contributingTeams: input.contributingTeams,
-          tags: input.tags,
-          productAreaId: input.productAreaId,
-          dataClassification: input.dataClassification,
-          outcomeMetrics: {
-            create: input.outcomeMetrics.map((m) => ({ ...m, tenantId: this.tenantId })),
-          },
-          hypotheses: { create: input.hypotheses.map((h) => ({ ...h, tenantId: this.tenantId })) },
-        },
-      });
+  /**
+   * The actual creation logic, extracted out of `create()` so it can run
+   * inside a transaction the CALLER already owns — needed by
+   * OpportunitiesRepository.promote(), which must create the Initiative
+   * and update the Opportunity's `promotedToInitiativeId` atomically in one
+   * transaction rather than two. `create()` above is just this wrapped in
+   * its own `withTx` for the normal single-write case.
+   */
+  async createWithTx(
+    tx: Prisma.TransactionClient,
+    input: CreateInitiativeDto,
+    actorUserId: string,
+    sourceOpportunityId: string | null = null,
+  ): Promise<Initiative> {
+    const slug = await this.uniqueSlug(tx, input.title);
 
-      await this.versions.record(tx, {
+    const initiative = await tx.initiative.create({
+      data: {
         tenantId: this.tenantId,
-        entityType: 'Initiative',
-        entityId: initiative.id,
-        version: initiative.version,
-        snapshot: initiative,
-        changedBy: actorUserId,
-        changeSummary: 'Created',
-      });
-
-      await this.outbox.emit(tx, {
-        tenantId: this.tenantId,
-        eventType: 'initiative.created',
-        entityType: 'Initiative',
-        entityId: initiative.id,
-        initiativeId: initiative.id,
-        actorUserId,
-        payload: {
-          initiativeId: initiative.id,
-          title: initiative.title,
-          slug: initiative.slug,
-          ownerId: initiative.ownerId,
-          productAreaId: initiative.productAreaId,
-          phase: initiative.phase,
+        title: input.title,
+        slug,
+        problemStatement: input.problemStatement,
+        phase: input.phase,
+        health: input.health,
+        healthReason: input.healthReason,
+        confidence: input.confidence,
+        tshirtSize: input.tshirtSize,
+        scope: input.scope,
+        nonScope: input.nonScope,
+        plannedStart: input.plannedStart ? new Date(input.plannedStart) : null,
+        plannedEnd: input.plannedEnd ? new Date(input.plannedEnd) : null,
+        ownerId: input.ownerId,
+        businessSponsorId: input.businessSponsorId,
+        contributingTeams: input.contributingTeams,
+        tags: input.tags,
+        productAreaId: input.productAreaId,
+        sourceOpportunityId,
+        dataClassification: input.dataClassification,
+        outcomeMetrics: {
+          create: input.outcomeMetrics.map((m) => ({ ...m, tenantId: this.tenantId })),
         },
-      });
-
-      return initiative;
+        hypotheses: { create: input.hypotheses.map((h) => ({ ...h, tenantId: this.tenantId })) },
+      },
     });
+
+    await this.versions.record(tx, {
+      tenantId: this.tenantId,
+      entityType: 'Initiative',
+      entityId: initiative.id,
+      version: initiative.version,
+      snapshot: initiative,
+      changedBy: actorUserId,
+      changeSummary: sourceOpportunityId ? 'Created (promoted from Opportunity)' : 'Created',
+    });
+
+    await this.outbox.emit(tx, {
+      tenantId: this.tenantId,
+      eventType: 'initiative.created',
+      entityType: 'Initiative',
+      entityId: initiative.id,
+      initiativeId: initiative.id,
+      actorUserId,
+      payload: {
+        initiativeId: initiative.id,
+        title: initiative.title,
+        slug: initiative.slug,
+        ownerId: initiative.ownerId,
+        productAreaId: initiative.productAreaId,
+        phase: initiative.phase,
+        sourceOpportunityId,
+      },
+    });
+
+    return initiative;
   }
 
   async findById(id: string): Promise<InitiativeWithRelations | null> {

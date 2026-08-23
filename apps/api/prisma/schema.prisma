@@ -87,6 +87,12 @@ model Tenant {
   entityVersions         EntityVersion[]
   outboxEvents           OutboxEvent[]
 
+  sources                      Source[]
+  evidenceItems                EvidenceItem[]
+  insights                     Insight[]
+  opportunities                Opportunity[]
+  opportunitySolutionTreeNodes OpportunitySolutionTreeNode[]
+
   @@map("tenants")
   @@schema("public")
 }
@@ -377,7 +383,13 @@ model Initiative {
 
   productAreaId       String?
   productArea         ProductArea? @relation(fields: [productAreaId], references: [id])
+  /// Trail preserved from Discovery (JTBD 1) — set when this initiative was
+  /// created via `POST /discovery/opportunities/:id/promote`. Distinct from
+  /// `promotedOpportunities` below: that's opportunities THIS initiative
+  /// absorbed later (should only ever be the one that created it, but
+  /// modeled as a relation, not a unique constraint, in case that changes).
   sourceOpportunityId String?
+  sourceOpportunity   Opportunity? @relation("InitiativeSourceOpportunity", fields: [sourceOpportunityId], references: [id], onDelete: SetNull)
 
   roadmapBucket RoadmapBucket?
   roadmapRank   Float?
@@ -393,15 +405,18 @@ model Initiative {
   updatedAt  DateTime  @updatedAt
   archivedAt DateTime?
 
-  outcomeMetrics OutcomeMetric[]
-  hypotheses     Hypothesis[]
-  raidItems      RaidItem[]
-  milestones     Milestone[]
-  statusUpdates  StatusUpdate[]
-  links          InitiativeLink[]
-  comments       InitiativeComment[]
-  watchers       InitiativeWatcher[]
-  stakeholders   InitiativeStakeholder[]
+  outcomeMetrics        OutcomeMetric[]
+  hypotheses            Hypothesis[]
+  raidItems             RaidItem[]
+  milestones            Milestone[]
+  statusUpdates         StatusUpdate[]
+  links                 InitiativeLink[]
+  comments              InitiativeComment[]
+  watchers              InitiativeWatcher[]
+  stakeholders          InitiativeStakeholder[]
+  /// Back-relation for Opportunity.promotedToInitiativeId (the opposite
+  /// direction of sourceOpportunity above).
+  promotedOpportunities Opportunity[]           @relation("OpportunityPromotedToInitiative")
 
   @@unique([tenantId, slug])
   @@index([tenantId])
@@ -678,6 +693,152 @@ model OutboxEvent {
   @@index([tenantId, processedAt])
   @@index([tenantId, initiativeId])
   @@map("outbox_events")
+  @@schema("public")
+}
+
+// ---------------------------------------------------------------------------
+// Discovery Hub (Phase 2, A8 / JTBD 1) — Sources -> Evidence -> Insights ->
+// Opportunities -> Initiatives, trail preserved. Mirrors
+// packages/shared-types/src/discovery.ts field-for-field — see
+// docs/03-data-model.md for why that file is the spec.
+// ---------------------------------------------------------------------------
+
+enum SourceType {
+  INTERVIEW
+  SUPPORT_TICKET
+  SURVEY
+  COMPETITIVE
+  DATA_FINDING
+  SALES_CALL
+  OTHER
+
+  @@schema("public")
+}
+
+model Source {
+  id       String @id @default(uuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  type                SourceType
+  name                String
+  /// Voice-of-customer connectors (Qualtrics/Medallia/Intercom/Zendesk) —
+  /// no ConnectorInstance model exists until Phase 5, so this is a bare id
+  /// with no FK yet, same treatment as Initiative.controlIds before Phase 3.
+  connectorInstanceId String?
+  externalRef         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  evidenceItems EvidenceItem[]
+
+  @@index([tenantId])
+  @@map("sources")
+  @@schema("public")
+}
+
+model EvidenceItem {
+  id       String @id @default(uuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+  sourceId String
+  source   Source @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  capturedAt DateTime
+  capturedBy String
+  content    String
+  tags       String[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, sourceId])
+  @@map("evidence_items")
+  @@schema("public")
+}
+
+model Insight {
+  id       String @id @default(uuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  title           String
+  summary         String
+  /// Ids into EvidenceItem, not a join table — mirrors the array shape in
+  /// shared-types/src/discovery.ts. No DB-level FK on array elements;
+  /// InsightsRepository validates each id exists + belongs to the tenant
+  /// before writing.
+  evidenceItemIds String[]
+  tags            String[]
+  /// Reuses the existing Confidence enum (Hypothesis/Initiative already use
+  /// the same low/medium/high scale) rather than declaring a duplicate.
+  confidence      Confidence @default(MEDIUM)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+  @@map("insights")
+  @@schema("public")
+}
+
+model Opportunity {
+  id       String @id @default(uuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  title          String
+  problemFraming String
+  /// Ids into Insight — same array-not-join-table treatment as
+  /// Insight.evidenceItemIds above, for the same reason.
+  insightIds     String[]
+
+  promotedToInitiativeId String?
+  promotedToInitiative   Initiative? @relation("OpportunityPromotedToInitiative", fields: [promotedToInitiativeId], references: [id], onDelete: SetNull)
+  promotedAt             DateTime?
+  promotedBy             String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  solutionTreeNodes    OpportunitySolutionTreeNode[]
+  /// Back-relation for Initiative.sourceOpportunityId.
+  sourceForInitiatives Initiative[]                  @relation("InitiativeSourceOpportunity")
+
+  @@index([tenantId])
+  @@index([tenantId, promotedToInitiativeId])
+  @@map("opportunities")
+  @@schema("public")
+}
+
+enum SolutionTreeNodeType {
+  OUTCOME
+  OPPORTUNITY
+  SOLUTION
+  EXPERIMENT
+
+  @@schema("public")
+}
+
+model OpportunitySolutionTreeNode {
+  id            String                        @id @default(uuid())
+  tenantId      String
+  tenant        Tenant                        @relation(fields: [tenantId], references: [id])
+  opportunityId String
+  opportunity   Opportunity                   @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  /// Restrict, not cascade — deleting a parent node shouldn't silently wipe
+  /// its children (same reasoning as InitiativeComment.parentCommentId).
+  parentNodeId  String?
+  parentNode    OpportunitySolutionTreeNode?  @relation("SolutionTreeChildren", fields: [parentNodeId], references: [id], onDelete: Restrict)
+  children      OpportunitySolutionTreeNode[] @relation("SolutionTreeChildren")
+
+  nodeType SolutionTreeNodeType
+  label    String
+
+  @@index([tenantId, opportunityId])
+  @@index([tenantId, parentNodeId])
+  @@map("opportunity_solution_tree_nodes")
   @@schema("public")
 }
 

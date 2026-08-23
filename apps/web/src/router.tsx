@@ -4,6 +4,8 @@ import { MyDayPage } from './pages/MyDayPage';
 import { InitiativeListPage } from './pages/initiatives/InitiativeListPage';
 import { InitiativeDetailPage } from './pages/initiatives/InitiativeDetailPage';
 import { RoadmapPage } from './pages/initiatives/RoadmapPage';
+import { DiscoveryHubPage } from './pages/discovery/DiscoveryHubPage';
+import { OpportunityDetailPage } from './pages/discovery/OpportunityDetailPage';
 
 const rootRoute = createRootRoute({ component: AppShell });
 
@@ -31,11 +33,25 @@ const roadmapRoute = createRoute({
   component: RoadmapPage,
 });
 
+const discoveryRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/discovery',
+  component: DiscoveryHubPage,
+});
+
+const opportunityDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/discovery/opportunities/$opportunityId',
+  component: OpportunityDetailPage,
+});
+
 const routeTree = rootRoute.addChildren([
   myDayRoute,
   initiativesRoute,
   initiativeDetailRoute,
   roadmapRoute,
+  discoveryRoute,
+  opportunityDetailRoute,
 ]);
 
 export const router = createRouter({ routeTree });

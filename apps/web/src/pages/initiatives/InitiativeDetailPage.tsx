@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { useParams } from '@tanstack/react-router';
+import { Link, useParams } from '@tanstack/react-router';
 import type { Initiative } from '@pdlc/shared-types';
 import { Button, Dialog, Input, Select, Table, Tabs, useToast } from '@pdlc/ui';
 import { isVersionConflict } from '../../lib/api-client';
+import { useOpportunity } from '../../features/discovery/hooks';
 import {
   useActivity,
   useAddStakeholder,
@@ -251,6 +252,7 @@ function OverviewTab({
 }) {
   return (
     <div className="flex max-w-2xl flex-col gap-4">
+      {initiative.sourceOpportunityId && <OriginTrail opportunityId={initiative.sourceOpportunityId} />}
       <EditableTextArea
         label="Problem statement"
         value={initiative.problemStatement}
@@ -308,6 +310,29 @@ function EditableTextArea({
         }}
       />
     </div>
+  );
+}
+
+/**
+ * The "why are we doing this" trail from Discovery Hub (Phase 2, JTBD 1) —
+ * only rendered when Initiative.sourceOpportunityId is set (i.e. this
+ * initiative was created via the Opportunity promote flow, not a plain
+ * "New initiative").
+ */
+function OriginTrail({ opportunityId }: { opportunityId: string }) {
+  const { data: opportunity } = useOpportunity(opportunityId);
+  if (!opportunity) return null;
+  return (
+    <p className="rounded-md border border-border bg-muted/5 px-3 py-2 text-sm text-fg">
+      Promoted from Opportunity:{' '}
+      <Link
+        to="/discovery/opportunities/$opportunityId"
+        params={{ opportunityId }}
+        className="text-primary hover:underline"
+      >
+        {opportunity.title}
+      </Link>
+    </p>
   );
 }
 

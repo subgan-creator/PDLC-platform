@@ -8,12 +8,13 @@ interface NavItem {
 }
 
 // Module map per CLAUDE.md — order matches the PDLC lifecycle (A3). Items
-// for modules not yet built (Phase 2+) are intentionally omitted rather
+// for modules not yet built (Phase 3+) are intentionally omitted rather
 // than linked-and-broken; add them as each phase ships.
 const NAV_ITEMS: NavItem[] = [
   { to: '/', label: 'My Day' },
   { to: '/initiatives', label: 'Initiatives' },
   { to: '/roadmap', label: 'Roadmap' },
+  { to: '/discovery', label: 'Discovery' },
 ];
 
 /**

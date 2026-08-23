@@ -9,7 +9,7 @@
  * so it can seed rows for both tenants in one pass.
  */
 import { faker } from '@faker-js/faker';
-import { PrismaClient, type Persona, type PermissionAction } from '@prisma/client';
+import { PrismaClient, type Persona, type PermissionAction, type SourceType } from '@prisma/client';
 import { slugify } from '../src/common/util/slug';
 
 const prisma = new PrismaClient();
@@ -42,6 +42,15 @@ const PERMISSIONS: PermissionSeed[] = [
   },
   { resource: 'control', action: 'ATTEST', description: '(Phase 3/v2) Attest a control mapping' },
   { resource: 'stagegate', action: 'APPROVE', description: '(v2) Approve a stage-gate transition' },
+  // Discovery Hub (Phase 2, JTBD 1) — one resource key covers all 5
+  // entities (Source/EvidenceItem/Insight/Opportunity/
+  // OpportunitySolutionTreeNode), same as how RAID/Milestones piggyback on
+  // 'initiative' rather than getting their own resource — they're all one
+  // module's worth of grants, not independently permissioned.
+  { resource: 'discovery', action: 'CREATE', description: '(Phase 2) Create Discovery Hub records' },
+  { resource: 'discovery', action: 'READ', description: '(Phase 2) View Discovery Hub records' },
+  { resource: 'discovery', action: 'UPDATE', description: '(Phase 2) Edit Discovery Hub records, including promoting an opportunity to an initiative' },
+  { resource: 'discovery', action: 'DELETE', description: '(Phase 2) Delete Discovery Hub records' },
 ];
 
 interface RoleSeed {
@@ -66,6 +75,10 @@ const ROLES: RoleSeed[] = [
       { resource: 'initiative', action: 'UPDATE' },
       { resource: 'initiative', action: 'DELETE' },
       { resource: 'initiative', action: 'EXPORT' },
+      { resource: 'discovery', action: 'CREATE' },
+      { resource: 'discovery', action: 'READ' },
+      { resource: 'discovery', action: 'UPDATE' },
+      { resource: 'discovery', action: 'DELETE' },
     ],
   },
   {
@@ -76,6 +89,7 @@ const ROLES: RoleSeed[] = [
       { resource: 'user', action: 'READ' },
       { resource: 'initiative', action: 'READ' },
       { resource: 'initiative', action: 'EXPORT' },
+      { resource: 'discovery', action: 'READ' },
     ],
   },
   {
@@ -86,6 +100,7 @@ const ROLES: RoleSeed[] = [
       { resource: 'user', action: 'READ' },
       { resource: 'initiative', action: 'READ' },
       { resource: 'initiative', action: 'EXPORT' },
+      { resource: 'discovery', action: 'READ' },
     ],
   },
   {
@@ -97,6 +112,7 @@ const ROLES: RoleSeed[] = [
       { resource: 'attachment', action: 'CREATE' },
       { resource: 'attachment', action: 'READ' },
       { resource: 'initiative', action: 'READ' },
+      { resource: 'discovery', action: 'READ' },
     ],
   },
   {
@@ -106,6 +122,7 @@ const ROLES: RoleSeed[] = [
     permissions: [
       { resource: 'user', action: 'READ' },
       { resource: 'initiative', action: 'READ' },
+      { resource: 'discovery', action: 'READ' },
     ],
   },
   {
@@ -117,6 +134,14 @@ const ROLES: RoleSeed[] = [
       { resource: 'attachment', action: 'CREATE' },
       { resource: 'attachment', action: 'READ' },
       { resource: 'initiative', action: 'READ' },
+      // Full grant, not just READ — the brief scopes this persona as
+      // "contributes to Discovery workspace" (00-brief.md A2), the only
+      // v1 persona besides PM that authors Discovery Hub records rather
+      // than just consuming the trail.
+      { resource: 'discovery', action: 'CREATE' },
+      { resource: 'discovery', action: 'READ' },
+      { resource: 'discovery', action: 'UPDATE' },
+      { resource: 'discovery', action: 'DELETE' },
     ],
   },
   {
@@ -127,6 +152,7 @@ const ROLES: RoleSeed[] = [
       { resource: 'user', action: 'READ' },
       { resource: 'initiative', action: 'READ' },
       { resource: 'control', action: 'ATTEST' },
+      { resource: 'discovery', action: 'READ' },
     ],
   },
   {
@@ -137,6 +163,7 @@ const ROLES: RoleSeed[] = [
       { resource: 'user', action: 'READ' },
       { resource: 'initiative', action: 'READ' },
       { resource: 'stagegate', action: 'APPROVE' },
+      { resource: 'discovery', action: 'READ' },
     ],
   },
   {
@@ -146,6 +173,7 @@ const ROLES: RoleSeed[] = [
     permissions: [
       { resource: 'user', action: 'READ' },
       { resource: 'initiative', action: 'READ' },
+      { resource: 'discovery', action: 'READ' },
     ],
   },
   {
@@ -156,6 +184,7 @@ const ROLES: RoleSeed[] = [
       { resource: 'user', action: 'READ' },
       { resource: 'initiative', action: 'READ' },
       { resource: 'initiative', action: 'EXPORT' },
+      { resource: 'discovery', action: 'READ' },
     ],
   },
 ];
@@ -539,6 +568,194 @@ async function seedInitiativeWorkspace(
   console.log('  Initiative Workspace seeded: 60 initiatives across 3 product areas.');
 }
 
+const SOURCE_DEFS: Array<{ type: SourceType; name: string }> = [
+  { type: 'INTERVIEW', name: 'Q1 customer interview batch — everyday banking' },
+  { type: 'INTERVIEW', name: 'Q1 customer interview batch — lending' },
+  { type: 'SUPPORT_TICKET', name: 'Zendesk export — card disputes, last 90 days' },
+  { type: 'SUPPORT_TICKET', name: 'Zendesk export — mobile login failures' },
+  { type: 'SURVEY', name: 'Post-transaction NPS survey, Q1' },
+  { type: 'COMPETITIVE', name: 'Competitive teardown — 3 neobank onboarding flows' },
+  { type: 'DATA_FINDING', name: 'Funnel drop-off analysis — account opening' },
+  { type: 'SALES_CALL', name: 'Enterprise prospect call notes — lending desk' },
+];
+
+const EVIDENCE_TAGS = ['onboarding', 'trust', 'speed', 'mobile', 'fees', 'support', 'clarity'];
+
+const INSIGHT_DEFS = [
+  'Customers abandon account opening when asked for a physical branch visit',
+  'Card dispute status is invisible to customers once filed',
+  'Users don’t trust an approval decision without a visible reason',
+  'Mobile login failures spike after an OS update, before anyone reports it',
+  'Customers repeatedly ask support questions the product could answer itself',
+  'Fee explanations are found confusing across every surveyed segment',
+  'Competitors let a user pre-qualify for a loan in under 2 minutes, we take 15',
+  'Joint account holders can’t both see the same real-time balance',
+  'Support tickets spike right after a UI change ships, then fade over a week',
+  'Customers conflate "pending" and "declined" transaction states',
+  'Hardship assistance requests are abandoned mid-form more than any other flow',
+  'Savings goal progress isn’t visible unless a customer digs for it',
+];
+
+const OPPORTUNITY_DEFS = [
+  { title: 'Remove the branch-visit requirement from account opening', framing: 'Account opening abandons at a high rate specifically at the identity-verification step, and interviews trace this to an unexpected branch-visit requirement customers weren’t told about upfront.' },
+  { title: 'Give customers real-time visibility into a filed card dispute', framing: 'Card disputes are a black box once filed — customers have no way to check status, so they call support instead, which both frustrates them and costs us handle time.' },
+  { title: 'Surface a plain-language reason alongside every approval decision', framing: 'Approval and denial decisions currently show a result with no explanation, and both survey and interview data point to this eroding trust in the decision itself.' },
+  { title: 'Detect and pre-empt post-OS-update login failures', framing: 'A recurring pattern of login failures follows every major mobile OS update, well before support ticket volume makes it visible — we’re always reacting instead of catching it early.' },
+  { title: 'Let a user pre-qualify for a loan in under 2 minutes', framing: 'Competitive teardown shows every neobank we looked at offers a sub-2-minute pre-qualification flow; our lending desk sales calls confirm this is a stated reason prospects choose a competitor.' },
+  { title: 'Make joint account balances update in real time for both holders', framing: 'Joint account holders see stale balances relative to each other, which interview subjects describe as actively undermining trust between the two account holders.' },
+  { title: 'Redesign the hardship assistance form to reduce mid-flow abandonment', framing: 'Hardship assistance has the highest form-abandonment rate we’ve measured, at a moment when the customer is already in a difficult financial situation.' },
+  { title: 'Make savings goal progress visible without the customer having to look for it', framing: 'Savings goals exist in the product but interview subjects consistently forget they’re there — progress is never surfaced anywhere the customer naturally looks.' },
+];
+
+/**
+ * Idempotent the same way seedInitiativeWorkspace is — checks a count
+ * rather than upserting each row individually. Requires
+ * seedInitiativeWorkspace to have already run for this tenant: 3 of the 8
+ * opportunities are seeded pre-promoted, pointing at real initiatives, so
+ * the "why are we doing this" trail is visible immediately without
+ * needing to run the promote flow by hand first.
+ */
+async function seedDiscoveryHub(
+  tenantId: string,
+  researcherUsers: SeedUser[],
+  allUsers: SeedUser[],
+  existingInitiativeIds: string[],
+): Promise<void> {
+  const existingCount = await prisma.source.count({ where: { tenantId } });
+  if (existingCount > 0) {
+    console.log(`  Discovery Hub: ${existingCount} sources already present, skipping seed.`);
+    return;
+  }
+  if (existingInitiativeIds.length < 3) {
+    console.log('  Discovery Hub: fewer than 3 initiatives to link — skipping seed.');
+    return;
+  }
+
+  console.log('  Seeding Discovery Hub: 8 sources, evidence, insights, opportunities...');
+
+  const capturedByPool = researcherUsers.length > 0 ? researcherUsers : allUsers;
+  const evidenceItemIds: string[] = [];
+
+  for (const def of SOURCE_DEFS) {
+    const source = await prisma.source.create({ data: { tenantId, ...def } });
+
+    const evidenceCount = faker.number.int({ min: 3, max: 5 });
+    for (let i = 0; i < evidenceCount; i++) {
+      const item = await prisma.evidenceItem.create({
+        data: {
+          tenantId,
+          sourceId: source.id,
+          capturedAt: faker.date.recent({ days: 90 }),
+          capturedBy: faker.helpers.arrayElement(capturedByPool)?.id ?? '',
+          content: faker.lorem.sentences({ min: 1, max: 3 }),
+          tags: faker.helpers.arrayElements(EVIDENCE_TAGS, { min: 0, max: 3 }),
+        },
+      });
+      evidenceItemIds.push(item.id);
+    }
+  }
+
+  const insightIds: string[] = [];
+  for (const title of INSIGHT_DEFS) {
+    const insight = await prisma.insight.create({
+      data: {
+        tenantId,
+        title,
+        summary: faker.lorem.sentences(2),
+        evidenceItemIds: faker.helpers.arrayElements(evidenceItemIds, { min: 2, max: 4 }),
+        tags: faker.helpers.arrayElements(EVIDENCE_TAGS, { min: 0, max: 2 }),
+        confidence: faker.helpers.arrayElement(['LOW', 'MEDIUM', 'HIGH']),
+      },
+    });
+    insightIds.push(insight.id);
+  }
+
+  const promotableInitiativeIds = faker.helpers.arrayElements(existingInitiativeIds, 3);
+  const opportunityIds: string[] = [];
+  for (let i = 0; i < OPPORTUNITY_DEFS.length; i++) {
+    const def = OPPORTUNITY_DEFS[i];
+    if (!def) continue;
+    const linkedInsightIds = faker.helpers.arrayElements(insightIds, { min: 1, max: 3 });
+    const promotedInitiativeId = promotableInitiativeIds[i];
+
+    const opportunity = await prisma.opportunity.create({
+      data: {
+        tenantId,
+        title: def.title,
+        problemFraming: def.framing,
+        insightIds: linkedInsightIds,
+        ...(promotedInitiativeId
+          ? {
+              promotedToInitiativeId: promotedInitiativeId,
+              promotedAt: faker.date.recent({ days: 30 }),
+              promotedBy: faker.helpers.arrayElement(capturedByPool)?.id ?? null,
+            }
+          : {}),
+      },
+    });
+    opportunityIds.push(opportunity.id);
+
+    // Backfill the other side of the trail — normally the app's
+    // OpportunitiesRepository.promote() sets both sides in one
+    // transaction, but the seed script writes both tables directly.
+    if (promotedInitiativeId) {
+      await prisma.initiative.update({
+        where: { id: promotedInitiativeId },
+        data: { sourceOpportunityId: opportunity.id },
+      });
+    }
+  }
+
+  // A small Opportunity Solution Tree (outcome -> opportunity -> solution
+  // /experiment, 2-3 levels deep) on 4 of the 8 opportunities.
+  const treeOpportunityIds = faker.helpers.arrayElements(opportunityIds, 4);
+  for (const opportunityId of treeOpportunityIds) {
+    const outcome = await prisma.opportunitySolutionTreeNode.create({
+      data: {
+        tenantId,
+        opportunityId,
+        parentNodeId: null,
+        nodeType: 'OUTCOME',
+        label: faker.helpers.arrayElement([
+          'Increase self-service completion rate',
+          'Reduce time-to-resolution',
+          'Increase applicant conversion',
+        ]),
+      },
+    });
+
+    const subOpportunityCount = faker.number.int({ min: 1, max: 2 });
+    for (let o = 0; o < subOpportunityCount; o++) {
+      const subOpportunity = await prisma.opportunitySolutionTreeNode.create({
+        data: {
+          tenantId,
+          opportunityId,
+          parentNodeId: outcome.id,
+          nodeType: 'OPPORTUNITY',
+          label: faker.lorem.sentence({ min: 4, max: 8 }),
+        },
+      });
+
+      const leafCount = faker.number.int({ min: 1, max: 2 });
+      for (let l = 0; l < leafCount; l++) {
+        await prisma.opportunitySolutionTreeNode.create({
+          data: {
+            tenantId,
+            opportunityId,
+            parentNodeId: subOpportunity.id,
+            nodeType: faker.helpers.arrayElement(['SOLUTION', 'EXPERIMENT']),
+            label: faker.lorem.sentence({ min: 3, max: 7 }),
+          },
+        });
+      }
+    }
+  }
+
+  console.log(
+    `  Discovery Hub seeded: ${SOURCE_DEFS.length} sources, ${evidenceItemIds.length} evidence items, ${insightIds.length} insights, ${opportunityIds.length} opportunities (3 promoted), ${treeOpportunityIds.length} solution trees.`,
+  );
+}
+
 async function main(): Promise<void> {
   console.log('Seeding permission catalogue...');
   const permissionRecords = await Promise.all(
@@ -634,6 +851,23 @@ async function main(): Promise<void> {
       });
       const allUsers = await prisma.user.findMany({ where: { tenantId: tenant.id } });
       await seedInitiativeWorkspace(tenant.id, pmUsers, allUsers);
+
+      // Phase 2 (Prompt 2): Discovery Hub, same tenant-scoping choice as
+      // Phase 1 — needs the initiatives just seeded above to link 3
+      // promoted opportunities to real rows.
+      const researcherUsers = await prisma.user.findMany({
+        where: { tenantId: tenant.id, primaryPersona: 'RESEARCHER' },
+      });
+      const existingInitiatives = await prisma.initiative.findMany({
+        where: { tenantId: tenant.id },
+        select: { id: true },
+      });
+      await seedDiscoveryHub(
+        tenant.id,
+        researcherUsers,
+        allUsers,
+        existingInitiatives.map((i) => i.id),
+      );
     }
   }
 

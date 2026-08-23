@@ -50,6 +50,7 @@
     "@faker-js/faker": "^9.3.0",
     "@nestjs/cli": "^10.4.9",
     "@nestjs/testing": "^10.4.15",
+    "@swc/core": "1.16.1",
     "@types/express": "^5.0.0",
     "@types/node": "^22.10.2",
     "@types/uuid": "^10.0.0",
@@ -64,6 +65,7 @@
     "tsconfig-paths-webpack-plugin": "4.2.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
+    "unplugin-swc": "1.5.11",
     "vitest": "^2.1.8",
     "webpack": "5.109.2",
     "webpack-node-externals": "3.0.0"
