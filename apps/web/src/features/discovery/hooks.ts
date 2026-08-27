@@ -12,6 +12,7 @@ import type {
   PromoteOpportunityInput,
   UpdateInsightInput,
   UpdateOpportunityInput,
+  UpdateSolutionTreeNodeInput,
   UpdateSourceInput,
 } from './types';
 
@@ -236,6 +237,17 @@ export function useCreateSolutionTreeNode(opportunityId: string) {
   return useMutation({
     mutationFn: (input: CreateSolutionTreeNodeInput) =>
       api.createSolutionTreeNode(opportunityId, input, devIdentity ?? undefined),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: ['discovery', 'solution-tree', opportunityId] }),
+  });
+}
+
+export function useUpdateSolutionTreeNode(opportunityId: string) {
+  const { devIdentity } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: UpdateSolutionTreeNodeInput }) =>
+      api.updateSolutionTreeNode(opportunityId, id, input, devIdentity ?? undefined),
     onSuccess: () =>
       qc.invalidateQueries({ queryKey: ['discovery', 'solution-tree', opportunityId] }),
   });

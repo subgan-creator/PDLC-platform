@@ -3,15 +3,18 @@ import { useNavigate, useParams } from '@tanstack/react-router';
 import ReactFlow, { Background, type Edge, type Node } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { Button, Dialog, Input, Select, useToast } from '@pdlc/ui';
+import { isApiError } from '../../lib/api-client';
 import { useAuth } from '../../auth/auth-context';
 import {
   useCreateSolutionTreeNode,
+  useDeleteSolutionTreeNode,
   useInsights,
   useOpportunity,
   usePromoteOpportunity,
   useSolutionTreeNodes,
+  useUpdateSolutionTreeNode,
 } from '../../features/discovery/hooks';
-import type { SolutionTreeNodeType } from '../../features/discovery/types';
+import type { OpportunitySolutionTreeNode, SolutionTreeNodeType } from '../../features/discovery/types';
 
 const NODE_TYPE_OPTIONS: Array<{ value: SolutionTreeNodeType; label: string }> = [
   { value: 'OUTCOME', label: 'Outcome' },
@@ -68,6 +71,7 @@ export function OpportunityDetailPage() {
   const { data: treeNodes } = useSolutionTreeNodes(opportunityId);
   const { data: insightsData } = useInsights({ limit: 200 });
   const { push } = useToast();
+  const [editingNode, setEditingNode] = useState<OpportunitySolutionTreeNode | null>(null);
 
   if (isLoading || !opportunity) {
     return <p className="text-sm text-muted">Loading opportunity…</p>;
@@ -131,13 +135,38 @@ export function OpportunityDetailPage() {
 
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-fg">Opportunity Solution Tree</h2>
-        <div className="h-96 rounded-md border border-border" role="img" aria-label="Opportunity solution tree diagram">
-          <ReactFlow nodes={rfNodes} edges={rfEdges} fitView proOptions={{ hideAttribution: true }}>
+        <p className="text-sm text-muted">
+          Outcome → Opportunity → Solution/Experiment, laid out as a tree. Click a node to edit its
+          label or delete it; use the form below to add a new one.
+        </p>
+        <div
+          className="h-96 rounded-md border border-border"
+          role="img"
+          aria-label="Opportunity solution tree diagram"
+        >
+          <ReactFlow
+            nodes={rfNodes}
+            edges={rfEdges}
+            fitView
+            proOptions={{ hideAttribution: true }}
+            onNodeClick={(_event, node) => {
+              const match = (treeNodes ?? []).find((n) => n.id === node.id);
+              if (match) setEditingNode(match);
+            }}
+          >
             <Background />
           </ReactFlow>
         </div>
         <AddNodeForm opportunityId={opportunityId} nodes={treeNodes ?? []} />
       </section>
+
+      <EditNodeDialog
+        key={editingNode?.id ?? 'none'}
+        opportunityId={opportunityId}
+        node={editingNode}
+        hasChildren={(treeNodes ?? []).some((n) => n.parentNodeId === editingNode?.id)}
+        onClose={() => setEditingNode(null)}
+      />
     </div>
   );
 }
@@ -192,6 +221,81 @@ function PromoteDialog({
           </Button>
         </div>
       </div>
+    </Dialog>
+  );
+}
+
+function EditNodeDialog({
+  opportunityId,
+  node,
+  hasChildren,
+  onClose,
+}: {
+  opportunityId: string;
+  node: OpportunitySolutionTreeNode | null;
+  hasChildren: boolean;
+  onClose: () => void;
+}) {
+  const update = useUpdateSolutionTreeNode(opportunityId);
+  const del = useDeleteSolutionTreeNode(opportunityId);
+  const { push } = useToast();
+  const [label, setLabel] = useState(node?.label ?? '');
+  const [nodeType, setNodeType] = useState<SolutionTreeNodeType>(node?.nodeType ?? 'OUTCOME');
+
+  return (
+    <Dialog
+      open={!!node}
+      onOpenChange={(open) => !open && onClose()}
+      title={node ? `Edit node: ${node.label}` : 'Edit node'}
+    >
+      {node && (
+        <form
+          className="flex flex-col gap-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void update.mutateAsync({ id: node.id, input: { label, nodeType } }).then(onClose);
+          }}
+        >
+          <Input label="Label" value={label} onChange={(e) => setLabel(e.target.value)} required />
+          <Select
+            label="Type"
+            options={NODE_TYPE_OPTIONS}
+            value={nodeType}
+            onValueChange={(v) => setNodeType(v as SolutionTreeNodeType)}
+          />
+          <div className="flex items-center justify-between gap-2">
+            <Button
+              type="button"
+              variant="danger"
+              size="sm"
+              disabled={del.isPending || hasChildren}
+              title={hasChildren ? 'Delete its child nodes first' : undefined}
+              onClick={() => {
+                void del
+                  .mutateAsync(node.id)
+                  .then(onClose)
+                  .catch((err: unknown) => {
+                    push({
+                      title: 'Could not delete node',
+                      description: isApiError(err) ? err.problem.detail : undefined,
+                      variant: 'danger',
+                    });
+                  });
+              }}
+            >
+              Delete
+            </Button>
+            <div className="flex gap-2">
+              <Button type="button" variant="secondary" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={update.isPending || !label}>
+                Save
+              </Button>
+            </div>
+          </div>
+        </form>
+      )}
     </Dialog>
   );
 }

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import type { OpportunitySolutionTreeNode } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantScopedRepository } from '../common/repository/tenant-scoped.repository';
@@ -89,9 +89,22 @@ export class SolutionTreeRepository extends TenantScopedRepository {
         where: { id, opportunityId, tenantId: this.tenantId },
       });
       if (!existing) throw new NotFoundException(`Node ${id} not found`);
-      // parentNodeId FK is ON DELETE RESTRICT (schema.prisma) — deleting a
-      // node with children fails at the DB level rather than silently
-      // orphaning them; the caller must delete children first.
+
+      // parentNodeId FK is ON DELETE RESTRICT (schema.prisma) — without
+      // this check, deleting a node with children would surface as a raw
+      // Postgres FK-violation 500, not a clean, actionable error. Checked
+      // in the same transaction as the delete so it can't race a
+      // concurrent child insert.
+      const child = await tx.opportunitySolutionTreeNode.findFirst({
+        where: { parentNodeId: id, tenantId: this.tenantId },
+        select: { id: true },
+      });
+      if (child) {
+        throw new BadRequestException(
+          'This node has children — delete those first before deleting this one.',
+        );
+      }
+
       await tx.opportunitySolutionTreeNode.delete({ where: { id } });
     });
   }

@@ -46,8 +46,15 @@ export async function apiFetch<T>(
     );
   }
 
-  if (res.status === 204) return undefined as T;
-  return (await res.json()) as T;
+  // Don't gate empty-body handling on status 204 alone: NestJS's default
+  // status for a controller method that returns void (every DELETE
+  // endpoint in this app) is 200 with an empty body, not 204 — res.json()
+  // throws a SyntaxError ("Unexpected end of JSON input") parsing that.
+  // Never caught until Discovery Hub's Solution Tree editing became the
+  // first place in the app to actually call a DELETE endpoint from the UI.
+  const text = await res.text();
+  if (!text) return undefined as T;
+  return JSON.parse(text) as T;
 }
 
 /**

@@ -203,13 +203,23 @@ export function InitiativeListPage() {
                     key: 'title',
                     header: 'Title',
                     render: (row: Initiative) => (
-                      <Link
-                        to="/initiatives/$initiativeId"
-                        params={{ initiativeId: row.id }}
-                        className="font-medium text-fg hover:text-primary hover:underline"
-                      >
-                        {row.title}
-                      </Link>
+                      <span className="flex items-center gap-2">
+                        <Link
+                          to="/initiatives/$initiativeId"
+                          params={{ initiativeId: row.id }}
+                          className="font-medium text-fg hover:text-primary hover:underline"
+                        >
+                          {row.title}
+                        </Link>
+                        {row.sourceOpportunityId && (
+                          <span
+                            title="Sourced from Discovery Hub"
+                            className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary"
+                          >
+                            Discovery
+                          </span>
+                        )}
+                      </span>
                     ),
                   },
                   {
