@@ -208,6 +208,7 @@ export function OpportunityDetailPage() {
   const { push } = useToast();
   const [editingNode, setEditingNode] = useState<OpportunitySolutionTreeNode | null>(null);
   const [renamingNodeId, setRenamingNodeId] = useState<string | null>(null);
+  const [addingFirstNode, setAddingFirstNode] = useState(false);
 
   if (isLoading || !opportunity) {
     return <p className="text-sm text-muted">Loading opportunity…</p>;
@@ -271,12 +272,14 @@ export function OpportunityDetailPage() {
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-semibold text-fg">Opportunity Solution Tree</h2>
         <p className="text-sm text-muted">
-          Outcome → Opportunity → Solution/Experiment, laid out as a tree. Hover a node for a{' '}
-          <strong className="text-fg">+</strong> to add a child, double-click its label to rename it,
-          or click it for more options (change type, delete).
+          {(treeNodes ?? []).length === 0
+            ? 'Outcome → Opportunity → Solution/Experiment, laid out as a tree. Start with the outcome you’re aiming for.'
+            : <>Outcome → Opportunity → Solution/Experiment, laid out as a tree. Hover a node for a{' '}
+                <strong className="text-fg">+</strong> to add a child, double-click its label to rename
+                it, or click it for more options (change type, delete).</>}
         </p>
         <div
-          className="h-96 rounded-md border border-border"
+          className="relative h-96 rounded-md border border-border"
           role="img"
           aria-label="Opportunity solution tree diagram"
         >
@@ -304,9 +307,34 @@ export function OpportunityDetailPage() {
           >
             <Background />
           </ReactFlow>
+          {/* Empty state — a bare dotted grid gave no clue there was any
+              way to add a node at all; the hover "+" only exists on
+              EXISTING nodes, so for a brand-new tree the bottom
+              AddNodeForm (easy to miss, below the fold under an empty
+              canvas) was the only path in. This is now the obvious,
+              primary one. */}
+          {(treeNodes ?? []).length === 0 && (
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 text-center">
+              <p className="max-w-xs text-sm text-muted">
+                No nodes yet — add the first one to start mapping this opportunity.
+              </p>
+              <Button type="button" className="pointer-events-auto" onClick={() => setAddingFirstNode(true)}>
+                + Add the first node
+              </Button>
+            </div>
+          )}
         </div>
         <AddNodeForm opportunityId={opportunityId} nodes={treeNodes ?? []} />
       </section>
+
+      <QuickAddChildDialog
+        open={addingFirstNode}
+        onClose={() => setAddingFirstNode(false)}
+        opportunityId={opportunityId}
+        parentNodeId={null}
+        parentLabel={null}
+        suggestedType="OUTCOME"
+      />
 
       <EditNodeDialog
         key={editingNode?.id ?? 'none'}
@@ -450,11 +478,12 @@ function EditNodeDialog({
 }
 
 /**
- * Triggered by a node's hover "+" (see SolutionNodeCard) — same
- * useCreateSolutionTreeNode mutation as AddNodeForm below, just entered
- * from the canvas with the parent already implied instead of picked from
- * a dropdown. Local `open`/form state is naturally scoped per node
- * instance (this dialog is rendered once per SolutionNodeCard), so unlike
+ * Triggered either by a node's hover "+" (see SolutionNodeCard, parent
+ * implied) or by the empty-canvas "Add the first node" CTA below
+ * (parentNodeId null — this becomes a root/Outcome node). Same
+ * useCreateSolutionTreeNode mutation as AddNodeForm further down, just
+ * entered from the canvas instead of a dropdown-driven form. Local
+ * `open`/form state is naturally scoped per caller instance, so unlike
  * EditNodeDialog it doesn't need a key-remount trick to reset between uses.
  */
 function QuickAddChildDialog({
@@ -468,8 +497,8 @@ function QuickAddChildDialog({
   open: boolean;
   onClose: () => void;
   opportunityId: string;
-  parentNodeId: string;
-  parentLabel: string;
+  parentNodeId: string | null;
+  parentLabel: string | null;
   suggestedType: SolutionTreeNodeType;
 }) {
   const create = useCreateSolutionTreeNode(opportunityId);
@@ -480,8 +509,8 @@ function QuickAddChildDialog({
     <Dialog
       open={open}
       onOpenChange={(o) => !o && onClose()}
-      title="Add a child node"
-      description={`Adding under "${parentLabel}".`}
+      title={parentLabel ? 'Add a child node' : 'Add the first node'}
+      description={parentLabel ? `Adding under "${parentLabel}".` : 'This starts the tree, usually with the outcome you’re aiming for.'}
     >
       <form
         className="flex flex-col gap-4"

@@ -47,19 +47,24 @@ export function DiscoveryHubPage() {
       <header className="border-b border-border pb-4">
         <h1 className="text-xl font-semibold text-fg">Discovery Hub</h1>
         <p className="text-sm text-muted">
-          1. Sources & Evidence → 2. Insights → 3. Opportunities → 4. Initiatives, trail preserved.
+          Capture signal, cluster it into insights, and promote what&rsquo;s worth acting on into an
+          initiative — trail preserved end to end.
         </p>
       </header>
 
+      {/* variant="stepper" — user feedback was that plain text tabs didn't
+          read as a connected workflow. Steps stay freely clickable in
+          either direction (not a locked wizard); see Tabs.tsx for why. */}
       <Tabs
         aria-label="Discovery Hub sections"
+        variant="stepper"
         value={tab}
         onValueChange={setTab}
         items={[
-          { value: 'sources', label: '1. Sources', content: <SourcesTab /> },
-          { value: 'evidence', label: '2. Evidence', content: <EvidenceTab onDone={() => setTab('insights')} /> },
-          { value: 'insights', label: '3. Insights', content: <InsightsTab onPromoted={() => setTab('opportunities')} /> },
-          { value: 'opportunities', label: '4. Opportunities', content: <OpportunitiesTab /> },
+          { value: 'sources', label: 'Sources', content: <SourcesTab /> },
+          { value: 'evidence', label: 'Evidence', content: <EvidenceTab onDone={() => setTab('insights')} /> },
+          { value: 'insights', label: 'Insights', content: <InsightsTab onPromoted={() => setTab('opportunities')} /> },
+          { value: 'opportunities', label: 'Opportunities', content: <OpportunitiesTab /> },
         ]}
       />
     </div>
