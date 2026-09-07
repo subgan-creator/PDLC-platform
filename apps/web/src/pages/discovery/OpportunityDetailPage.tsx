@@ -1,9 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from '@tanstack/react-router';
 import ReactFlow, {
   Background,
   Handle,
   Position,
+  ReactFlowProvider,
+  useNodesInitialized,
+  useReactFlow,
   type Edge,
   type Node,
   type NodeProps,
@@ -74,7 +77,9 @@ function layoutTree(nodes: Array<{ id: string; parentNodeId: string | null }>): 
     const width = 220;
     const totalWidth = level.length * width;
     level.forEach((id, i) => {
-      positions.set(id, { x: i * width - totalWidth / 2 + width / 2, y: depth * 140 });
+      // 170, not 140 — nodes got taller once the "+ Add child" button
+      // became part of the card instead of a floating hover overlay.
+      positions.set(id, { x: i * width - totalWidth / 2 + width / 2, y: depth * 170 });
     });
     depth += 1;
     level = level.flatMap((id) => childrenByParent.get(id) ?? []);
@@ -177,15 +182,19 @@ function SolutionNodeCard({ id, data }: NodeProps<SolutionNodeData>) {
           {label}
         </div>
       )}
+      {/* Always visible, not hover-gated — a floating "+" that only
+          appeared on hover turned out to be a genuinely hidden affordance
+          (a real user report: even after adding the empty-tree CTA, "it's
+          not apparent how to add a new node" once one already exists). An
+          in-flow, clearly labeled button needs no discovery at all. */}
       <button
         type="button"
         aria-label={`Add a child node under "${label}"`}
-        title="Add a child node here"
-        className="absolute -bottom-3 left-1/2 hidden h-6 w-6 -translate-x-1/2 items-center justify-center rounded-full bg-primary text-sm font-bold leading-none text-white shadow group-hover:flex group-focus-within:flex"
+        className="mt-2 flex w-full items-center justify-center gap-1 rounded border border-dashed border-border py-1 text-xs font-medium text-muted hover:border-primary hover:text-primary"
         onClick={() => setAddingChild(true)}
         data-no-node-click
       >
-        +
+        + Add child
       </button>
       <Handle type="source" position={Position.Bottom} />
 
@@ -202,6 +211,49 @@ function SolutionNodeCard({ id, data }: NodeProps<SolutionNodeData>) {
 }
 
 const NODE_TYPES: NodeTypes = { solutionNode: SolutionNodeCard };
+
+/**
+ * Renders nothing — just re-runs fitView() whenever the node count
+ * changes, so a newly added node is actually visible without the user
+ * having to manually pan/zoom to find it. Must be a descendant of
+ * ReactFlowProvider (does not need to be inside <ReactFlow> itself).
+ *
+ * A single requestAnimationFrame after the count changed is NOT enough:
+ * confirmed live (add a node without reloading — the viewport didn't
+ * budge, even though a fresh page load with the same nodes fits all of
+ * them correctly). React Flow only knows a node's real size after its own
+ * ResizeObserver-based measurement commits, which can land a frame or two
+ * after React's render — an early fitView() call computes bounds as if
+ * the new node weren't there yet. `useNodesInitialized()` is React Flow's
+ * own signal for "every current node has been measured".
+ *
+ * It's not enough on its own either, though — also confirmed live: a
+ * first attempt keyed the effect only off `nodesInitialized` and it
+ * consistently fit N-1 nodes, one add behind. Cause: for this custom node
+ * type, measurement is fast enough that `nodesInitialized` can go
+ * true→true across an add without this effect ever observing a `false`
+ * in between, so a dependency array of just `[nodesInitialized]` doesn't
+ * reliably re-fire when a node is added. `nodeCount` changing on every
+ * add is the one signal guaranteed to differ, so the effect depends on
+ * both: it re-checks whenever either changes, and `fitView()` only runs
+ * once nodesInitialized is actually true for the current count (tracked
+ * via `lastFittedCountRef` so an unrelated nodesInitialized flicker
+ * doesn't re-fit the same count twice).
+ */
+function FitViewOnNodesChange({ nodeCount }: { nodeCount: number }) {
+  const { fitView } = useReactFlow();
+  const nodesInitialized = useNodesInitialized();
+  const lastFittedCountRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!nodesInitialized) return;
+    if (lastFittedCountRef.current === nodeCount) return;
+    lastFittedCountRef.current = nodeCount;
+    fitView({ duration: 200 });
+  }, [nodeCount, nodesInitialized, fitView]);
+
+  return null;
+}
 
 export function OpportunityDetailPage() {
   const { opportunityId } = useParams({ from: '/discovery/opportunities/$opportunityId' });
@@ -277,39 +329,47 @@ export function OpportunityDetailPage() {
         <p className="text-sm text-muted">
           {(treeNodes ?? []).length === 0
             ? 'Outcome → Opportunity → Solution/Experiment, laid out as a tree. Start with the outcome you’re aiming for.'
-            : <>Outcome → Opportunity → Solution/Experiment, laid out as a tree. Hover a node for a{' '}
-                <strong className="text-fg">+</strong> to add a child, double-click its label to rename
-                it, or click it for more options (change type, delete).</>}
+            : 'Outcome → Opportunity → Solution/Experiment, laid out as a tree. Each node has an "+ Add child" button; double-click its label to rename it, or click it for more options (change type, delete).'}
         </p>
         <div
           className="relative h-96 rounded-md border border-border"
           role="img"
           aria-label="Opportunity solution tree diagram"
         >
-          <ReactFlow
-            nodes={rfNodes}
-            edges={rfEdges}
-            nodeTypes={NODE_TYPES}
-            fitView
-            proOptions={{ hideAttribution: true }}
-            onNodeClick={(event, node) => {
-              // The hover "+" (add child) and the rename input mark
-              // themselves with data-no-node-click — see SolutionNodeCard.
-              // React Flow's own node-click handling isn't stopped by a
-              // plain event.stopPropagation() from a descendant element,
-              // so this app-level guard is what actually prevents those
-              // interactions from also opening the full edit dialog.
-              if ((event.target as HTMLElement).closest('[data-no-node-click]')) return;
-              const match = (treeNodes ?? []).find((n) => n.id === node.id);
-              if (match) setEditingNode(match);
-            }}
-            onNodeDoubleClick={(event, node) => {
-              if ((event.target as HTMLElement).closest('[data-no-node-click]')) return;
-              setRenamingNodeId(node.id);
-            }}
-          >
-            <Background />
-          </ReactFlow>
+          {/* ReactFlowProvider — needed for FitViewOnNodesChange's
+              useReactFlow() below. Without it, `fitView` only ever runs
+              once on mount (React Flow's documented default): add a
+              child node and it lands off-screen, needing a manual pan to
+              find — which would have undermined the "+ Add child" fix
+              right above it (add a node, can't see it, looks broken
+              again). */}
+          <ReactFlowProvider>
+            <ReactFlow
+              nodes={rfNodes}
+              edges={rfEdges}
+              nodeTypes={NODE_TYPES}
+              fitView
+              proOptions={{ hideAttribution: true }}
+              onNodeClick={(event, node) => {
+                // The hover "+" (add child) and the rename input mark
+                // themselves with data-no-node-click — see SolutionNodeCard.
+                // React Flow's own node-click handling isn't stopped by a
+                // plain event.stopPropagation() from a descendant element,
+                // so this app-level guard is what actually prevents those
+                // interactions from also opening the full edit dialog.
+                if ((event.target as HTMLElement).closest('[data-no-node-click]')) return;
+                const match = (treeNodes ?? []).find((n) => n.id === node.id);
+                if (match) setEditingNode(match);
+              }}
+              onNodeDoubleClick={(event, node) => {
+                if ((event.target as HTMLElement).closest('[data-no-node-click]')) return;
+                setRenamingNodeId(node.id);
+              }}
+            >
+              <Background />
+            </ReactFlow>
+            <FitViewOnNodesChange nodeCount={(treeNodes ?? []).length} />
+          </ReactFlowProvider>
           {/* Empty state — a bare dotted grid gave no clue there was any
               way to add a node at all; the hover "+" only exists on
               EXISTING nodes, so for a brand-new tree the bottom
@@ -526,6 +586,19 @@ function QuickAddChildDialog({
             })
             .catch(reportMutationError(push, 'Could not add node'));
         }}
+        // data-no-node-click — this dialog is rendered nested inside a
+        // SolutionNodeCard, so Radix's Portal moves its DOM elsewhere
+        // (document.body), but React's synthetic events still bubble
+        // through the REACT tree, not the DOM tree: a click on "Add" (or
+        // "Cancel") was still reaching React Flow's onNodeClick for the
+        // parent node underneath, re-opening its full edit dialog right
+        // after this one closed (confirmed live — adding a child
+        // consistently popped open "Edit node: <parent>" afterward). The
+        // existing data-no-node-click guard in onNodeClick does a real
+        // DOM .closest() walk from the click's actual target, which does
+        // include this <form> (the portal's own subtree is intact, just
+        // detached from the node's DOM) — so marking it here is enough.
+        data-no-node-click
       >
         <Input label="Label" value={label} onChange={(e) => setLabel(e.target.value)} required autoFocus />
         <Select
