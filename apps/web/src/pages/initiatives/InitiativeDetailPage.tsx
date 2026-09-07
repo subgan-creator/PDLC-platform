@@ -12,10 +12,12 @@ import {
   useCreateComment,
   useCreateLink,
   useCreateMilestone,
+  useCreateOutcomeMetric,
   useCreateRaidItem,
   useInitiative,
   useLinks,
   useMilestones,
+  useOutcomeMetrics,
   useRaidItems,
   useStakeholders,
   useStatusUpdates,
@@ -167,7 +169,7 @@ export function InitiativeDetailPage() {
           {
             value: 'outcomes',
             label: 'Outcomes',
-            content: <OutcomesTab initiative={initiative} />,
+            content: <OutcomesTab initiativeId={initiativeId} />,
           },
           { value: 'raid', label: 'RAID', content: <RaidTab initiativeId={initiativeId} /> },
           {
@@ -336,21 +338,89 @@ function OriginTrail({ opportunityId }: { opportunityId: string }) {
   );
 }
 
-function OutcomesTab({ initiative }: { initiative: InitiativeWithRelations }) {
+/**
+ * Was read-only — a table plus "No outcome metrics yet.", with no way to
+ * actually add one (a real user hit this: "how do I add outcomes?"). The
+ * API only ever accepted outcomeMetrics at initiative-creation time; there
+ * was no endpoint to add one afterward. Fixed with a dedicated
+ * outcome-metrics endpoint plus this add form, matching RaidTab's
+ * list-query + inline-form shape below.
+ */
+function OutcomesTab({ initiativeId }: { initiativeId: string }) {
+  const { data: metrics } = useOutcomeMetrics(initiativeId);
+  const create = useCreateOutcomeMetric(initiativeId);
+  const { push } = useToast();
+  const [metricName, setMetricName] = useState('');
+  const [baseline, setBaseline] = useState('');
+  const [target, setTarget] = useState('');
+  const [unit, setUnit] = useState('');
+
   return (
-    <Table
-      caption="Outcome metrics"
-      rows={initiative.outcomeMetrics}
-      getRowId={(r) => r.id}
-      emptyMessage="No outcome metrics yet."
-      columns={[
-        { key: 'metric', header: 'Metric', render: (r) => r.metricName },
-        { key: 'baseline', header: 'Baseline', render: (r) => r.baseline ?? '—' },
-        { key: 'current', header: 'Current', render: (r) => r.current ?? '—' },
-        { key: 'target', header: 'Target', render: (r) => r.target },
-        { key: 'unit', header: 'Unit', render: (r) => r.unit },
-      ]}
-    />
+    <div className="flex flex-col gap-4">
+      <Table
+        caption="Outcome metrics"
+        rows={metrics ?? []}
+        getRowId={(r) => r.id}
+        emptyMessage="No outcome metrics yet."
+        columns={[
+          { key: 'metric', header: 'Metric', render: (r) => r.metricName },
+          { key: 'baseline', header: 'Baseline', render: (r) => r.baseline ?? '—' },
+          { key: 'current', header: 'Current', render: (r) => r.current ?? '—' },
+          { key: 'target', header: 'Target', render: (r) => r.target },
+          { key: 'unit', header: 'Unit', render: (r) => r.unit },
+        ]}
+      />
+      <form
+        className="flex flex-wrap items-end gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const parsedTarget = Number(target);
+          if (!metricName || !unit || Number.isNaN(parsedTarget)) return;
+          void create
+            .mutateAsync({
+              metricName,
+              baseline: baseline === '' ? null : Number(baseline),
+              target: parsedTarget,
+              current: null,
+              unit,
+              source: '',
+            })
+            .then(() => {
+              setMetricName('');
+              setBaseline('');
+              setTarget('');
+              setUnit('');
+            })
+            .catch(() =>
+              push({ title: 'Could not add outcome metric', description: 'Please try again.', variant: 'danger' }),
+            );
+        }}
+      >
+        <Input
+          label="Metric"
+          value={metricName}
+          onChange={(e) => setMetricName(e.target.value)}
+          required
+        />
+        <Input
+          label="Baseline"
+          type="number"
+          value={baseline}
+          onChange={(e) => setBaseline(e.target.value)}
+        />
+        <Input
+          label="Target"
+          type="number"
+          value={target}
+          onChange={(e) => setTarget(e.target.value)}
+          required
+        />
+        <Input label="Unit" value={unit} onChange={(e) => setUnit(e.target.value)} required />
+        <Button type="submit" disabled={create.isPending}>
+          Add
+        </Button>
+      </form>
+    </div>
   );
 }
 

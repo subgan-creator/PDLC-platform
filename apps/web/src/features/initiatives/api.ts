@@ -10,6 +10,8 @@ import type {
   ListInitiativesParams,
   ListInitiativesResult,
   Milestone,
+  OutcomeMetric,
+  OutcomeMetricInput,
   ProductArea,
   RaidItem,
   RepositionInput,
@@ -160,6 +162,48 @@ export function updateRaidItem(
 
 export function deleteRaidItem(initiativeId: string, id: string, dev?: DevIdentity): Promise<void> {
   return apiFetch(`/initiatives/${initiativeId}/raid/${id}`, { method: 'DELETE' }, dev);
+}
+
+// --- Outcome metrics ---------------------------------------------------------
+
+export function listOutcomeMetrics(
+  initiativeId: string,
+  dev?: DevIdentity,
+): Promise<OutcomeMetric[]> {
+  return apiFetch(`/initiatives/${initiativeId}/outcome-metrics`, {}, dev);
+}
+
+export function createOutcomeMetric(
+  initiativeId: string,
+  input: OutcomeMetricInput,
+  dev?: DevIdentity,
+): Promise<OutcomeMetric> {
+  return apiFetch(
+    `/initiatives/${initiativeId}/outcome-metrics`,
+    { method: 'POST', body: JSON.stringify(input) },
+    dev,
+  );
+}
+
+export function updateOutcomeMetric(
+  initiativeId: string,
+  id: string,
+  input: Partial<OutcomeMetricInput>,
+  dev?: DevIdentity,
+): Promise<OutcomeMetric> {
+  return apiFetch(
+    `/initiatives/${initiativeId}/outcome-metrics/${id}`,
+    { method: 'PATCH', body: JSON.stringify(input) },
+    dev,
+  );
+}
+
+export function deleteOutcomeMetric(
+  initiativeId: string,
+  id: string,
+  dev?: DevIdentity,
+): Promise<void> {
+  return apiFetch(`/initiatives/${initiativeId}/outcome-metrics/${id}`, { method: 'DELETE' }, dev);
 }
 
 // --- Milestones --------------------------------------------------------------

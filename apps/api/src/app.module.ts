@@ -17,6 +17,7 @@ import { VersionsModule } from './versioning/versions.module';
 import { ProductAreasModule } from './product-areas/product-areas.module';
 import { InitiativesModule } from './initiatives/initiatives.module';
 import { RaidModule } from './raid/raid.module';
+import { OutcomeMetricsModule } from './outcome-metrics/outcome-metrics.module';
 import { MilestonesModule } from './milestones/milestones.module';
 import { StatusUpdatesModule } from './status-updates/status-updates.module';
 import { LinksModule } from './links/links.module';
@@ -63,6 +64,7 @@ import { SolutionTreeModule } from './solution-tree/solution-tree.module';
     ProductAreasModule,
     InitiativesModule,
     RaidModule,
+    OutcomeMetricsModule,
     MilestonesModule,
     StatusUpdatesModule,
     LinksModule,

@@ -5,6 +5,8 @@ import type {
   BulkUpdateInput,
   CreateInitiativeInput,
   ListInitiativesParams,
+  OutcomeMetric,
+  OutcomeMetricInput,
   RepositionInput,
   UpdateInitiativeInput,
 } from './types';
@@ -169,6 +171,50 @@ export function useUpdateRaidItem(initiativeId: string) {
     mutationFn: ({ id, input }: { id: string; input: Partial<RaidItem> }) =>
       api.updateRaidItem(initiativeId, id, input, devIdentity ?? undefined),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['initiatives', 'raid', initiativeId] }),
+  });
+}
+
+// --- Outcome metrics ----------------------------------------------------------
+
+export function useOutcomeMetrics(initiativeId: string | undefined) {
+  const { devIdentity } = useAuth();
+  return useQuery({
+    queryKey: ['initiatives', 'outcome-metrics', initiativeId],
+    queryFn: () => api.listOutcomeMetrics(initiativeId as string, devIdentity ?? undefined),
+    enabled: !!devIdentity && !!initiativeId,
+  });
+}
+
+export function useCreateOutcomeMetric(initiativeId: string) {
+  const { devIdentity } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: OutcomeMetricInput) =>
+      api.createOutcomeMetric(initiativeId, input, devIdentity ?? undefined),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: ['initiatives', 'outcome-metrics', initiativeId] }),
+  });
+}
+
+export function useUpdateOutcomeMetric(initiativeId: string) {
+  const { devIdentity } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: Partial<OutcomeMetric> }) =>
+      api.updateOutcomeMetric(initiativeId, id, input, devIdentity ?? undefined),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: ['initiatives', 'outcome-metrics', initiativeId] }),
+  });
+}
+
+export function useDeleteOutcomeMetric(initiativeId: string) {
+  const { devIdentity } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      api.deleteOutcomeMetric(initiativeId, id, devIdentity ?? undefined),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: ['initiatives', 'outcome-metrics', initiativeId] }),
   });
 }
 

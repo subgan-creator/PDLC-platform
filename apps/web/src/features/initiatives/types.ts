@@ -12,17 +12,19 @@ import type {
   TShirtSize,
 } from '@pdlc/shared-types';
 
+export interface OutcomeMetric {
+  id: string;
+  metricName: string;
+  baseline: number | null;
+  target: number;
+  current: number | null;
+  unit: string;
+  source: string;
+}
+
 /** The API's actual response shape for a single initiative: the row plus its inline outcomes/hypotheses. */
 export interface InitiativeWithRelations extends SharedInitiative {
-  outcomeMetrics: Array<{
-    id: string;
-    metricName: string;
-    baseline: number | null;
-    target: number;
-    current: number | null;
-    unit: string;
-    source: string;
-  }>;
+  outcomeMetrics: OutcomeMetric[];
   hypotheses: Array<{
     id: string;
     statement: string;
@@ -30,6 +32,9 @@ export interface InitiativeWithRelations extends SharedInitiative {
     validated: boolean | null;
   }>;
 }
+
+/** Create/update body for the outcome-metrics endpoints — same shape as OutcomeMetric minus its id. */
+export type OutcomeMetricInput = Omit<OutcomeMetric, 'id'>;
 
 export type { InitiativeComment, InitiativeLink, Milestone, RaidItem, StatusUpdate };
 
