@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Button, Dialog, Input, Select, Table, Tabs } from '@pdlc/ui';
+import { Button, Dialog, Input, Select, Table, Tabs, useToast } from '@pdlc/ui';
 import {
   useAllEvidenceItems,
   useCreateEvidenceItem,
@@ -12,6 +12,7 @@ import {
   useSources,
   useUpdateSource,
 } from '../../features/discovery/hooks';
+import { reportMutationError } from '../../features/discovery/report-mutation-error';
 import type { Confidence, Source, SourceType } from '../../features/discovery/types';
 
 const SOURCE_TYPE_OPTIONS: Array<{ value: SourceType; label: string }> = [
@@ -74,6 +75,7 @@ export function DiscoveryHubPage() {
 function SourcesTab() {
   const { data: sources } = useSources();
   const create = useCreateSource();
+  const { push } = useToast();
   const [name, setName] = useState('');
   const [type, setType] = useState<SourceType>('INTERVIEW');
   const [editing, setEditing] = useState<Source | null>(null);
@@ -121,7 +123,10 @@ function SourcesTab() {
         className="flex flex-wrap items-end gap-2"
         onSubmit={(e) => {
           e.preventDefault();
-          void create.mutateAsync({ type, name }).then(() => setName(''));
+          void create
+            .mutateAsync({ type, name })
+            .then(() => setName(''))
+            .catch(reportMutationError(push, 'Could not add source'));
         }}
       >
         <Input label="Name" value={name} onChange={(e) => setName(e.target.value)} required />
@@ -145,6 +150,7 @@ function SourcesTab() {
 
 function EditSourceDialog({ source, onClose }: { source: Source | null; onClose: () => void }) {
   const update = useUpdateSource();
+  const { push } = useToast();
   const [name, setName] = useState(source?.name ?? '');
   const [type, setType] = useState<SourceType>(source?.type ?? 'INTERVIEW');
   const [externalRef, setExternalRef] = useState(source?.externalRef ?? '');
@@ -163,7 +169,8 @@ function EditSourceDialog({ source, onClose }: { source: Source | null; onClose:
             e.preventDefault();
             void update
               .mutateAsync({ id: source.id, input: { name, type, externalRef: externalRef || null } })
-              .then(onClose);
+              .then(onClose)
+              .catch(reportMutationError(push, 'Could not save source'));
           }}
         >
           <Input label="Name" value={name} onChange={(e) => setName(e.target.value)} required />
@@ -199,6 +206,7 @@ function EvidenceTab({ onDone }: { onDone: () => void }) {
   const activeSourceId = sourceId ?? sources?.[0]?.id;
   const create = useCreateEvidenceItem(activeSourceId ?? '');
   const { items: allEvidence } = useAllEvidenceItems();
+  const { push } = useToast();
   const [content, setContent] = useState('');
   const [capturedBy, setCapturedBy] = useState('');
 
@@ -252,7 +260,8 @@ function EvidenceTab({ onDone }: { onDone: () => void }) {
               capturedBy,
               capturedAt: new Date().toISOString(),
             })
-            .then(() => setContent(''));
+            .then(() => setContent(''))
+            .catch(reportMutationError(push, 'Could not add evidence'));
         }}
       >
         <Input
@@ -289,6 +298,7 @@ function InsightsTab({ onPromoted }: { onPromoted: () => void }) {
   const create = useCreateInsight();
   const createOpportunity = useCreateOpportunity();
   const { items: allEvidence } = useAllEvidenceItems();
+  const { push } = useToast();
   const [title, setTitle] = useState('');
   const [summary, setSummary] = useState('');
   const [confidence, setConfidence] = useState<Confidence>('MEDIUM');
@@ -349,11 +359,14 @@ function InsightsTab({ onPromoted }: { onPromoted: () => void }) {
         className="flex flex-col gap-3 rounded-md border border-border p-3"
         onSubmit={(e) => {
           e.preventDefault();
-          void create.mutateAsync({ title, summary, confidence, evidenceItemIds }).then(() => {
-            setTitle('');
-            setSummary('');
-            setEvidenceItemIds([]);
-          });
+          void create
+            .mutateAsync({ title, summary, confidence, evidenceItemIds })
+            .then(() => {
+              setTitle('');
+              setSummary('');
+              setEvidenceItemIds([]);
+            })
+            .catch(reportMutationError(push, 'Could not add insight'));
         }}
       >
         <p className="text-sm font-medium text-fg">Add a new insight</p>
@@ -423,7 +436,8 @@ function InsightsTab({ onPromoted }: { onPromoted: () => void }) {
                 setOppTitle('');
                 setOppFraming('');
                 onPromoted();
-              });
+              })
+              .catch(reportMutationError(push, 'Could not promote to an opportunity'));
           }}
         >
           <Input label="Title" value={oppTitle} onChange={(e) => setOppTitle(e.target.value)} required autoFocus />
@@ -451,6 +465,7 @@ function OpportunitiesTab() {
   const { data } = useOpportunities({ limit: 200 });
   const { data: insightsData } = useInsights({ limit: 200 });
   const create = useCreateOpportunity();
+  const { push } = useToast();
   const [title, setTitle] = useState('');
   const [problemFraming, setProblemFraming] = useState('');
   const [insightIds, setInsightIds] = useState<string[]>([]);
@@ -505,11 +520,14 @@ function OpportunitiesTab() {
         className="flex flex-col gap-3 rounded-md border border-border p-3"
         onSubmit={(e) => {
           e.preventDefault();
-          void create.mutateAsync({ title, problemFraming, insightIds }).then(() => {
-            setTitle('');
-            setProblemFraming('');
-            setInsightIds([]);
-          });
+          void create
+            .mutateAsync({ title, problemFraming, insightIds })
+            .then(() => {
+              setTitle('');
+              setProblemFraming('');
+              setInsightIds([]);
+            })
+            .catch(reportMutationError(push, 'Could not add opportunity'));
         }}
       >
         <p className="text-sm font-medium text-fg">

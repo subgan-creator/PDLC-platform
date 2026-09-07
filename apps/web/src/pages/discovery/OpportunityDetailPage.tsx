@@ -11,7 +11,6 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { Button, Dialog, Input, Select, useToast } from '@pdlc/ui';
-import { isApiError } from '../../lib/api-client';
 import { useAuth } from '../../auth/auth-context';
 import {
   useCreateSolutionTreeNode,
@@ -22,6 +21,7 @@ import {
   useSolutionTreeNodes,
   useUpdateSolutionTreeNode,
 } from '../../features/discovery/hooks';
+import { reportMutationError } from '../../features/discovery/report-mutation-error';
 import type { OpportunitySolutionTreeNode, SolutionTreeNodeType } from '../../features/discovery/types';
 
 const NODE_TYPE_OPTIONS: Array<{ value: SolutionTreeNodeType; label: string }> = [
@@ -115,6 +115,7 @@ interface SolutionNodeData {
 function SolutionNodeCard({ id, data }: NodeProps<SolutionNodeData>) {
   const { label, nodeType, opportunityId, renaming, onRenameDone } = data;
   const update = useUpdateSolutionTreeNode(opportunityId);
+  const { push } = useToast();
   const colors = NODE_TYPE_COLORS[nodeType];
   const [draft, setDraft] = useState(label);
   const [addingChild, setAddingChild] = useState(false);
@@ -128,7 +129,9 @@ function SolutionNodeCard({ id, data }: NodeProps<SolutionNodeData>) {
   function commitRename() {
     const trimmed = draft.trim();
     if (trimmed && trimmed !== label) {
-      void update.mutateAsync({ id, input: { label: trimmed } });
+      void update
+        .mutateAsync({ id, input: { label: trimmed } })
+        .catch(reportMutationError(push, 'Could not rename node'));
     }
     onRenameDone();
   }
@@ -430,7 +433,10 @@ function EditNodeDialog({
           className="flex flex-col gap-4"
           onSubmit={(e) => {
             e.preventDefault();
-            void update.mutateAsync({ id: node.id, input: { label, nodeType } }).then(onClose);
+            void update
+              .mutateAsync({ id: node.id, input: { label, nodeType } })
+              .then(onClose)
+              .catch(reportMutationError(push, 'Could not save node'));
           }}
         >
           <Input label="Label" value={label} onChange={(e) => setLabel(e.target.value)} required />
@@ -451,13 +457,7 @@ function EditNodeDialog({
                 void del
                   .mutateAsync(node.id)
                   .then(onClose)
-                  .catch((err: unknown) => {
-                    push({
-                      title: 'Could not delete node',
-                      description: isApiError(err) ? err.problem.detail : undefined,
-                      variant: 'danger',
-                    });
-                  });
+                  .catch(reportMutationError(push, 'Could not delete node'));
               }}
             >
               Delete
@@ -502,6 +502,7 @@ function QuickAddChildDialog({
   suggestedType: SolutionTreeNodeType;
 }) {
   const create = useCreateSolutionTreeNode(opportunityId);
+  const { push } = useToast();
   const [label, setLabel] = useState('');
   const [nodeType, setNodeType] = useState<SolutionTreeNodeType>(suggestedType);
 
@@ -522,7 +523,8 @@ function QuickAddChildDialog({
               setLabel('');
               setNodeType(suggestedType);
               onClose();
-            });
+            })
+            .catch(reportMutationError(push, 'Could not add node'));
         }}
       >
         <Input label="Label" value={label} onChange={(e) => setLabel(e.target.value)} required autoFocus />
@@ -558,6 +560,7 @@ function AddNodeForm({
   nodes: Array<{ id: string; label: string }>;
 }) {
   const create = useCreateSolutionTreeNode(opportunityId);
+  const { push } = useToast();
   const [label, setLabel] = useState('');
   const [nodeType, setNodeType] = useState<SolutionTreeNodeType>('OUTCOME');
   const [parentNodeId, setParentNodeId] = useState<string | undefined>(undefined);
@@ -574,7 +577,8 @@ function AddNodeForm({
         e.preventDefault();
         void create
           .mutateAsync({ label, nodeType, parentNodeId: parentNodeId ?? null })
-          .then(() => setLabel(''));
+          .then(() => setLabel(''))
+          .catch(reportMutationError(push, 'Could not add node'));
       }}
     >
       <Input label="Node label" value={label} onChange={(e) => setLabel(e.target.value)} required />
