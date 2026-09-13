@@ -174,6 +174,15 @@ export function useUpdateRaidItem(initiativeId: string) {
   });
 }
 
+export function useDeleteRaidItem(initiativeId: string) {
+  const { devIdentity } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.deleteRaidItem(initiativeId, id, devIdentity ?? undefined),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['initiatives', 'raid', initiativeId] }),
+  });
+}
+
 // --- Outcome metrics ----------------------------------------------------------
 
 export function useOutcomeMetrics(initiativeId: string | undefined) {

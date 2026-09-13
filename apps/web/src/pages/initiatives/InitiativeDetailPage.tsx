@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useParams } from '@tanstack/react-router';
-import type { Initiative } from '@pdlc/shared-types';
+import type { Initiative, RaidItem } from '@pdlc/shared-types';
 import { Button, Dialog, Input, Select, Table, Tabs, useToast } from '@pdlc/ui';
 import { isVersionConflict } from '../../lib/api-client';
 import { useOpportunity } from '../../features/discovery/hooks';
@@ -14,6 +14,8 @@ import {
   useCreateMilestone,
   useCreateOutcomeMetric,
   useCreateRaidItem,
+  useDeleteOutcomeMetric,
+  useDeleteRaidItem,
   useInitiative,
   useLinks,
   useMilestones,
@@ -22,10 +24,12 @@ import {
   useStakeholders,
   useStatusUpdates,
   useUpdateInitiative,
+  useUpdateOutcomeMetric,
+  useUpdateRaidItem,
   useVersions,
 } from '../../features/initiatives/hooks';
 import { HealthBadge, PhaseBadge } from '../../features/initiatives/components/badges';
-import type { InitiativeWithRelations } from '../../features/initiatives/types';
+import type { InitiativeWithRelations, OutcomeMetric } from '../../features/initiatives/types';
 import { StatusUpdateComposer } from '../../features/initiatives/components/StatusUpdateComposer';
 import {
   ConflictMergeDialog,
@@ -41,6 +45,17 @@ const RACI_OPTIONS = ['RESPONSIBLE', 'ACCOUNTABLE', 'CONSULTED', 'INFORMED'].map
   value: v,
   label: v,
 }));
+const RAID_TYPE_OPTIONS = ['RISK', 'ASSUMPTION', 'ISSUE', 'DEPENDENCY'].map((v) => ({
+  value: v,
+  label: v,
+}));
+const RAID_SEVERITY_OPTIONS = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].map((v) => ({
+  value: v,
+  label: v,
+}));
+// The field a real user asked about by name ("how do I update the
+// status") — RaidItem.status wasn't editable anywhere once created.
+const RAID_STATUS_OPTIONS = ['OPEN', 'MITIGATED', 'CLOSED'].map((v) => ({ value: v, label: v }));
 
 export function InitiativeDetailPage() {
   const { initiativeId } = useParams({ from: '/initiatives/$initiativeId' });
@@ -354,6 +369,13 @@ function OutcomesTab({ initiativeId }: { initiativeId: string }) {
   const [baseline, setBaseline] = useState('');
   const [target, setTarget] = useState('');
   const [unit, setUnit] = useState('');
+  // Once a metric exists there was no way back into it — no edit button
+  // anywhere (a real user hit this right after adding one: "how do I edit
+  // this?"). Same click-a-row-to-edit shape as Discovery Hub's solution
+  // tree nodes (see EditNodeDialog there): a row's Edit button sets this,
+  // the dialog below is keyed off the metric's id so its form state
+  // resets cleanly between different rows.
+  const [editingMetric, setEditingMetric] = useState<OutcomeMetric | null>(null);
 
   return (
     <div className="flex flex-col gap-4">
@@ -368,6 +390,15 @@ function OutcomesTab({ initiativeId }: { initiativeId: string }) {
           { key: 'current', header: 'Current', render: (r) => r.current ?? '—' },
           { key: 'target', header: 'Target', render: (r) => r.target },
           { key: 'unit', header: 'Unit', render: (r) => r.unit },
+          {
+            key: 'actions',
+            header: 'Actions',
+            render: (r) => (
+              <Button type="button" variant="secondary" size="sm" onClick={() => setEditingMetric(r)}>
+                Edit
+              </Button>
+            ),
+          },
         ]}
       />
       <form
@@ -420,16 +451,116 @@ function OutcomesTab({ initiativeId }: { initiativeId: string }) {
           Add
         </Button>
       </form>
+      <EditOutcomeMetricDialog
+        key={editingMetric?.id ?? 'none'}
+        initiativeId={initiativeId}
+        metric={editingMetric}
+        onClose={() => setEditingMetric(null)}
+      />
     </div>
+  );
+}
+
+function EditOutcomeMetricDialog({
+  initiativeId,
+  metric,
+  onClose,
+}: {
+  initiativeId: string;
+  metric: OutcomeMetric | null;
+  onClose: () => void;
+}) {
+  const update = useUpdateOutcomeMetric(initiativeId);
+  const del = useDeleteOutcomeMetric(initiativeId);
+  const { push } = useToast();
+  const [metricName, setMetricName] = useState(metric?.metricName ?? '');
+  const [baseline, setBaseline] = useState(metric?.baseline?.toString() ?? '');
+  const [current, setCurrent] = useState(metric?.current?.toString() ?? '');
+  const [target, setTarget] = useState(metric?.target.toString() ?? '');
+  const [unit, setUnit] = useState(metric?.unit ?? '');
+
+  return (
+    <Dialog
+      open={!!metric}
+      onOpenChange={(open) => !open && onClose()}
+      title={metric ? `Edit outcome metric: ${metric.metricName}` : 'Edit outcome metric'}
+    >
+      {metric && (
+        <form
+          className="flex flex-col gap-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const parsedTarget = Number(target);
+            if (!metricName || !unit || Number.isNaN(parsedTarget)) return;
+            void update
+              .mutateAsync({
+                id: metric.id,
+                input: {
+                  metricName,
+                  baseline: baseline === '' ? null : Number(baseline),
+                  current: current === '' ? null : Number(current),
+                  target: parsedTarget,
+                  unit,
+                },
+              })
+              .then(onClose)
+              .catch(() =>
+                push({ title: 'Could not save outcome metric', description: 'Please try again.', variant: 'danger' }),
+              );
+          }}
+        >
+          <Input label="Metric" value={metricName} onChange={(e) => setMetricName(e.target.value)} required />
+          <Input label="Baseline" type="number" value={baseline} onChange={(e) => setBaseline(e.target.value)} />
+          <Input label="Current" type="number" value={current} onChange={(e) => setCurrent(e.target.value)} />
+          <Input label="Target" type="number" value={target} onChange={(e) => setTarget(e.target.value)} required />
+          <Input label="Unit" value={unit} onChange={(e) => setUnit(e.target.value)} required />
+          <div className="flex items-center justify-between gap-2">
+            <Button
+              type="button"
+              variant="danger"
+              size="sm"
+              disabled={del.isPending}
+              onClick={() => {
+                void del
+                  .mutateAsync(metric.id)
+                  .then(onClose)
+                  .catch(() =>
+                    push({
+                      title: 'Could not delete outcome metric',
+                      description: 'Please try again.',
+                      variant: 'danger',
+                    }),
+                  );
+              }}
+            >
+              Delete
+            </Button>
+            <div className="flex gap-2">
+              <Button type="button" variant="secondary" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={update.isPending || !metricName || !unit}>
+                Save
+              </Button>
+            </div>
+          </div>
+        </form>
+      )}
+    </Dialog>
   );
 }
 
 function RaidTab({ initiativeId }: { initiativeId: string }) {
   const { data: items } = useRaidItems(initiativeId);
   const create = useCreateRaidItem(initiativeId);
+  const { push } = useToast();
   const [type, setType] = useState('RISK');
   const [severity, setSeverity] = useState('MEDIUM');
   const [description, setDescription] = useState('');
+  // No way back into a RAID item once created — a real user hit this
+  // asking specifically "how do I update the status?". Same
+  // edit-button-per-row shape as OutcomesTab above.
+  const [editingItem, setEditingItem] = useState<RaidItem | null>(null);
 
   return (
     <div className="flex flex-col gap-4">
@@ -443,6 +574,15 @@ function RaidTab({ initiativeId }: { initiativeId: string }) {
           { key: 'severity', header: 'Severity', render: (r) => r.severity },
           { key: 'description', header: 'Description', render: (r) => r.description },
           { key: 'status', header: 'Status', render: (r) => r.status },
+          {
+            key: 'actions',
+            header: 'Actions',
+            render: (r) => (
+              <Button type="button" variant="secondary" size="sm" onClick={() => setEditingItem(r)}>
+                Edit
+              </Button>
+            ),
+          },
         ]}
       />
       <form
@@ -459,21 +599,21 @@ function RaidTab({ initiativeId }: { initiativeId: string }) {
               mitigation: null,
               status: 'OPEN',
             })
-            .then(() => setDescription(''));
+            .then(() => setDescription(''))
+            .catch(() =>
+              push({ title: 'Could not add RAID item', description: 'Please try again.', variant: 'danger' }),
+            );
         }}
       >
         <Select
           label="Type"
-          options={['RISK', 'ASSUMPTION', 'ISSUE', 'DEPENDENCY'].map((v) => ({
-            value: v,
-            label: v,
-          }))}
+          options={RAID_TYPE_OPTIONS}
           value={type}
           onValueChange={setType}
         />
         <Select
           label="Severity"
-          options={['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].map((v) => ({ value: v, label: v }))}
+          options={RAID_SEVERITY_OPTIONS}
           value={severity}
           onValueChange={setSeverity}
         />
@@ -487,7 +627,115 @@ function RaidTab({ initiativeId }: { initiativeId: string }) {
           Add
         </Button>
       </form>
+      <EditRaidItemDialog
+        key={editingItem?.id ?? 'none'}
+        initiativeId={initiativeId}
+        item={editingItem}
+        onClose={() => setEditingItem(null)}
+      />
     </div>
+  );
+}
+
+function EditRaidItemDialog({
+  initiativeId,
+  item,
+  onClose,
+}: {
+  initiativeId: string;
+  item: RaidItem | null;
+  onClose: () => void;
+}) {
+  const update = useUpdateRaidItem(initiativeId);
+  const del = useDeleteRaidItem(initiativeId);
+  const { push } = useToast();
+  // Widened to `string` explicitly — unlike the create form's fresh
+  // 'RISK' literal (which TS widens automatically), item?.type is already
+  // typed as the narrow RaidType union, so useState would otherwise infer
+  // that same narrow union and reject onValueChange={setType} (which
+  // Select's typed-as-string API requires).
+  const [type, setType] = useState<string>(item?.type ?? 'RISK');
+  const [severity, setSeverity] = useState<string>(item?.severity ?? 'MEDIUM');
+  const [description, setDescription] = useState(item?.description ?? '');
+  const [status, setStatus] = useState<string>(item?.status ?? 'OPEN');
+  const [mitigation, setMitigation] = useState(item?.mitigation ?? '');
+
+  return (
+    <Dialog
+      open={!!item}
+      onOpenChange={(open) => !open && onClose()}
+      title={item ? `Edit RAID item: ${item.description}` : 'Edit RAID item'}
+    >
+      {item && (
+        <form
+          className="flex flex-col gap-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void update
+              .mutateAsync({
+                id: item.id,
+                input: {
+                  type: type as never,
+                  severity: severity as never,
+                  description,
+                  status: status as never,
+                  mitigation: mitigation || null,
+                },
+              })
+              .then(onClose)
+              .catch(() =>
+                push({ title: 'Could not save RAID item', description: 'Please try again.', variant: 'danger' }),
+              );
+          }}
+        >
+          <Select label="Type" options={RAID_TYPE_OPTIONS} value={type} onValueChange={setType} />
+          <Select
+            label="Severity"
+            options={RAID_SEVERITY_OPTIONS}
+            value={severity}
+            onValueChange={setSeverity}
+          />
+          <Select label="Status" options={RAID_STATUS_OPTIONS} value={status} onValueChange={setStatus} />
+          <Input
+            label="Description"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            required
+          />
+          <Input
+            label="Mitigation"
+            value={mitigation}
+            onChange={(e) => setMitigation(e.target.value)}
+          />
+          <div className="flex items-center justify-between gap-2">
+            <Button
+              type="button"
+              variant="danger"
+              size="sm"
+              disabled={del.isPending}
+              onClick={() => {
+                void del
+                  .mutateAsync(item.id)
+                  .then(onClose)
+                  .catch(() =>
+                    push({ title: 'Could not delete RAID item', description: 'Please try again.', variant: 'danger' }),
+                  );
+              }}
+            >
+              Delete
+            </Button>
+            <div className="flex gap-2">
+              <Button type="button" variant="secondary" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={update.isPending || !description}>
+                Save
+              </Button>
+            </div>
+          </div>
+        </form>
+      )}
+    </Dialog>
   );
 }
 
